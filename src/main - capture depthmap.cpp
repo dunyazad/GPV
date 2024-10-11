@@ -14,20 +14,6 @@
 
 #include <Debugging/VisualDebugging.h>
 
-#include <CUDA/KDTree.cuh>
-
-int pid = 0;
-size_t size_0 = 0;
-size_t size_45 = 0;
-float transform_0[16];
-float transform_45[16];
-unsigned char image_0[400 * 480];
-unsigned char image_45[400 * 480];
-Eigen::Vector3f points_0[400 * 480];
-Eigen::Vector3f points_45[400 * 480];
-
-int index = 0;
-
 void OnKeyPress(vtkObject* caller, long unsigned int eventId, void* clientData, void* callData) {
     vtkRenderWindowInteractor* interactor = static_cast<vtkRenderWindowInteractor*>(caller);
     std::string key = interactor->GetKeySym();
@@ -149,38 +135,6 @@ void OnKeyPress(vtkObject* caller, long unsigned int eventId, void* clientData, 
 	{
 		VisualDebugging::ToggleVisibility("Spheres");
 	}
-	else if (key == "Right")
-	{
-	/*	for (size_t i = 0; i < 10; i++)
-		{
-			int h = index / 256;
-			int w = index % 256;
-
-			float x = (float)(w - 128) * 0.01f;
-			float y = (float)(h - 80) * 0.01f;
-
-			auto& p = points_0[(h * 3) * 256 + 255 - w] * 0.1f;
-
-			VisualDebugging::AddSphere("patch", { x, y, p.z() }, { 0.01f, 0.01f, 0.01f }, { 0.0f, 0.0f, 0.0f }, 0, 0, 255);
-
-			index++;
-		}*/
-
-		for (size_t i = 0; i < 100; i++)
-		{
-			Eigen::Vector3f p = points_0[index];
-			while (p.x() == FLT_MAX || p.y() == FLT_MAX || p.z() == FLT_MAX)
-			{
-				index++;
-				p = points_0[index];
-			}
-			VisualDebugging::AddSphere("patch", p, { 0.1f, 0.1f, 0.1f }, { 0.0f, 0.0f, 0.0f }, 0, 0, 255);
-
-			printf("%f, %f, %f\n", p.x(), p.y(), p.z());
-
-			index++;
-		}
-	}
 }
 
 class TimerCallback : public vtkCommand
@@ -203,60 +157,6 @@ public:
 private:
     void animate() { VisualDebugging::Update(); }
 };
-
-void LoadPatch(int patchID)
-{
-	stringstream ss;
-	ss << "C:\\Debug\\Patches\\patch_" << patchID << ".pat";
-
-	ifstream ifs;
-	ifs.open(ss.str(), ios::in | ios::binary);
-
-	ifs.read((char*)&pid, sizeof(int));
-	ifs.read((char*)&size_0, sizeof(size_t));
-	ifs.read((char*)&size_45, sizeof(size_t));
-	ifs.read((char*)&transform_0, sizeof(float) * 16);
-	ifs.read((char*)&transform_45, sizeof(float) * 16);
-	ifs.read((char*)&image_0, sizeof(unsigned char) * 400 * 480);
-	ifs.read((char*)&image_45, sizeof(unsigned char) * 400 * 480);
-	ifs.read((char*)&points_0, sizeof(Eigen::Vector3f) * size_0);
-	ifs.read((char*)&points_45, sizeof(Eigen::Vector3f) * size_45);
-
-	ifs.close();
-
-	//for (size_t i = 0; i < size_0; i++)
-	//{
-	//	auto& p = points_0[i];
-
-	//	if (p.x() == FLT_MAX)
-	//	{
-	//		p.x() = 0.0f;
-	//	}
-	//	if (p.y() == FLT_MAX)
-	//	{
-	//		p.y() = 0.0f;
-	//	}
-	//	if (p.z() == FLT_MAX)
-	//	{
-	//		p.z() = 0.0f;
-	//	}
-
-	//	VisualDebugging::AddSphere("patch", p * 0.1f, { 0.01f, 0.01f, 0.01f }, { 0.0f, 0.0f, 0.0f }, 255, 255, 255);
-	//}
-
-	//for (int h = 0; h < 160; h++)
-	//{
-	//	for (int w = 0; w < 256; w++)
-	//	{
-	//		float x = (float)(w - 128) * 0.01f;
-	//		float y = (float)(h - 80) * 0.01f;
-
-	//		auto& p = points_0[(h * 3) * 256 + 255 - w] * 0.1f;
-
-	//		VisualDebugging::AddSphere("patch", { x, y, p.z() }, { 0.01f, 0.01f, 0.01f }, { 0.0f, 0.0f, 0.0f }, 0, 0, 255);
-	//	}
-	//}
-}
 
 int main() {
     openvdb::initialize();
@@ -283,11 +183,17 @@ int main() {
 
     MaximizeVTKWindowOnMonitor(renderWindow, 2);
 
-	LoadPatch(3);
+	{
+		auto mesh = ReadPLY("C:\\Resources\\3D\\PLY\\Mesh.ply");
 
-	VisualDebugging::AddLine("axes", { 0, 0, 0 }, { (float)128, 0, 0 }, 255, 0, 0);
-	VisualDebugging::AddLine("axes", { 0, 0, 0 }, { 0, (float)240, 0 }, 0, 255, 0);
-	VisualDebugging::AddLine("axes", { 0, 0, 0 }, { 0, 0, (float)240 }, 0, 0, 255);
+		vtkNew<vtkPolyDataMapper> mapper;
+		mapper->SetInputData(mesh);
+
+		vtkNew<vtkActor> actor;
+		actor->SetMapper(mapper);
+
+		renderer->AddActor(actor);
+	}
 
     vtkSmartPointer<vtkCallbackCommand> keyPressCallback = vtkSmartPointer<vtkCallbackCommand>::New();
     keyPressCallback->SetCallback(OnKeyPress);
@@ -303,11 +209,9 @@ int main() {
 
     interactor->AddObserver(vtkCommand::KeyPressEvent, keyPressCallback);
 
-	//vtkCamera* camera = renderer->GetActiveCamera();
-	//camera->SetParallelProjection(true);
-	//renderer->ResetCamera();
-
-	CUDA::Test();
+	vtkCamera* camera = renderer->GetActiveCamera();
+	camera->SetParallelProjection(true);
+	renderer->ResetCamera();
 
     renderWindow->Render();
     interactor->Start();

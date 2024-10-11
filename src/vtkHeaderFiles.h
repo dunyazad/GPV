@@ -94,3 +94,7 @@
 #include <vtkOBJReader.h>
 #include <vtkPLYReader.h>
 #include <vtkPLYWriter.h>
+
+#include <vtkImageCast.h>
+#include <vtkImageData.h>
+#include <vtkPNGWriter.h>
