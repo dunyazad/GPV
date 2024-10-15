@@ -56,16 +56,6 @@ add_executable(GPV
     $<TARGET_OBJECTS:cuda_objects>  # Link CUDA object files here
 )
 
-# Link required libraries
-target_link_libraries(GPV PRIVATE OpenVDB::openvdb)
-target_link_libraries(GPV PRIVATE ${VTK_LIBRARIES})
-target_link_libraries(GPV PRIVATE CUDA::cudart CUDA::cuda_driver)
-
-# Optional: Enable CUDA separable compilation (set to OFF if not needed)
-set_target_properties(GPV PROPERTIES
-    CUDA_SEPARABLE_COMPILATION OFF  # Change to ON if separable compilation is required
-)
-
 # Optional: Set MSVC-specific options
 if(MSVC)
     set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT GPV)
@@ -73,6 +63,16 @@ if(MSVC)
 endif()
 
 target_include_directories(GPV PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    "External"
+    "External/eigen"
+    ${OPENVDB_INCLUDE_DIRS}
+    ${VTK_INCLUDE_DIRS}
+    ${CUDAToolkit_INCLUDE_DIRS}
+)
+
+target_include_directories(cuda_objects PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     "External"
@@ -111,5 +111,5 @@ function(assign_source_group)
     endforeach()
 endfunction(assign_source_group)
 
-assign_source_group(${source_list})
 assign_source_group(${cuda_source_list})
+assign_source_group(${source_list})

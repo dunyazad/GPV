@@ -204,7 +204,86 @@ private:
     void animate() { VisualDebugging::Update(); }
 };
 
-void LoadPatch(int patchID)
+// Bilateral filter function for 3D point cloud
+vtkSmartPointer<vtkPoints> BilateralFilter(vtkSmartPointer<vtkPolyData> inputCloud,
+	double spatialSigma, double featureSigma,
+	double neighborhoodSize)
+{
+	// Create output cloud
+	vtkSmartPointer<vtkPoints> outputPoints = vtkSmartPointer<vtkPoints>::New();
+	outputPoints->SetNumberOfPoints(inputCloud->GetNumberOfPoints());
+
+	// Use a KdTree for neighborhood search
+	vtkSmartPointer<vtkKdTreePointLocator> kdTree = vtkSmartPointer<vtkKdTreePointLocator>::New();
+	kdTree->SetDataSet(inputCloud);
+	kdTree->BuildLocator();
+
+	// Iterate over each point in the point cloud
+	for (vtkIdType i = 0; i < inputCloud->GetNumberOfPoints(); i++)
+	{
+		double p[3];
+		inputCloud->GetPoint(i, p);
+		if (p[0] == FLT_MAX || p[1] == FLT_MAX || p[2] == FLT_MAX)
+			continue;
+		if (p[0] < -1000 || p[1] < -1000 || p[2] < -1000)
+			continue;
+		if (p[0] > 1000 || p[1] > 1000 || p[2] > 1000)
+			continue;
+
+		// Find the neighboring points using KdTree within a radius
+		vtkSmartPointer<vtkIdList> neighbors = vtkSmartPointer<vtkIdList>::New();
+		kdTree->FindPointsWithinRadius(neighborhoodSize, p, neighbors);
+
+		// Bilateral filter weights and summation variables
+		double sumWeights = 0.0;
+		double newPoint[3] = { 0.0, 0.0, 0.0 };
+
+		// Iterate over neighbors
+		auto noi = neighbors->GetNumberOfIds();
+		for (vtkIdType j = 0; j < noi; j++)
+		{
+			vtkIdType neighborId = neighbors->GetId(j);
+			double neighborPoint[3];
+			inputCloud->GetPoint(neighborId, neighborPoint);
+
+			// Calculate spatial distance
+			double spatialDist = vtkMath::Distance2BetweenPoints(p, neighborPoint);
+			double spatialWeight = exp(-spatialDist / (2.0 * spatialSigma * spatialSigma));
+
+			// Calculate feature distance (here we use distance itself, can be curvature or normal)
+			double featureDist = vtkMath::Distance2BetweenPoints(p, neighborPoint);
+			double featureWeight = exp(-featureDist / (2.0 * featureSigma * featureSigma));
+
+			// Total weight
+			double totalWeight = spatialWeight * featureWeight;
+
+			// Update the weighted sum for the new point position
+			newPoint[0] += totalWeight * neighborPoint[0];
+			newPoint[1] += totalWeight * neighborPoint[1];
+			newPoint[2] += totalWeight * neighborPoint[2];
+
+			sumWeights += totalWeight;
+		}
+
+		// Normalize the new point
+		newPoint[0] /= sumWeights;
+		newPoint[1] /= sumWeights;
+		newPoint[2] /= sumWeights;
+
+		// Set the new filtered point
+		outputPoints->SetPoint(i, newPoint);
+
+		VisualDebugging::AddSphere("Spheres", { (float)newPoint[0],(float)newPoint[1],(float)newPoint[2] },
+			{ 0.05f, 0.05f, 0.05f }, { 0, 0, 0 }, 255, 255, 255);
+	}
+
+	// Update the input point cloud with the smoothed points
+	//inputCloud->SetPoints(outputPoints);
+
+	return outputPoints;
+}
+
+void LoadPatch(int patchID, vtkRenderer* renderer)
 {
 	stringstream ss;
 	ss << "C:\\Debug\\Patches\\patch_" << patchID << ".pat";
@@ -224,25 +303,82 @@ void LoadPatch(int patchID)
 
 	ifs.close();
 
-	//for (size_t i = 0; i < size_0; i++)
-	//{
-	//	auto& p = points_0[i];
+	vtkNew<vtkPoints> points;
+	points->SetNumberOfPoints(size_0);
 
-	//	if (p.x() == FLT_MAX)
-	//	{
-	//		p.x() = 0.0f;
-	//	}
-	//	if (p.y() == FLT_MAX)
-	//	{
-	//		p.y() = 0.0f;
-	//	}
-	//	if (p.z() == FLT_MAX)
-	//	{
-	//		p.z() = 0.0f;
-	//	}
+	for (size_t i = 0; i < size_0; i++)
+	{
+		auto& p = points_0[i];
 
-	//	VisualDebugging::AddSphere("patch", p * 0.1f, { 0.01f, 0.01f, 0.01f }, { 0.0f, 0.0f, 0.0f }, 255, 255, 255);
-	//}
+		if (p.x() == FLT_MAX || p.y() == FLT_MAX || p.z() == FLT_MAX)
+			continue;
+		if (p.x() < -1000 || p.y() < -1000 || p.z() < -1000)
+			continue;
+		if (p.x() > 1000 || p.y() > 1000 || p.z() > 1000)
+			continue;
+
+		points->InsertNextPoint(p.data());
+	}
+
+	vtkNew<vtkPolyData> polyData;
+	polyData->SetPoints(points);
+
+	WritePLY(polyData, "C:\\Debug\\GPV\\Original.ply");
+
+	//double spatialSigma = 0.5;  // adjust this based on the point cloud scale
+	//double featureSigma = 0.1;  // adjust based on feature variance
+	//double neighborhoodSize = 0.5;  // adjust based on the density of the point cloud
+
+	//// Apply bilateral filter
+	//vtkSmartPointer<vtkPoints> newPoints = BilateralFilter(polyData, spatialSigma, featureSigma, neighborhoodSize);
+
+	//vtkNew<vtkPolyData> newPolyData;
+	//newPolyData->SetPoints(newPoints);
+
+	//WritePLY(newPolyData, "C:\\Debug\\GPV\\Filtered.ply");
+
+	vtkNew<vtkVertexGlyphFilter> vertexFilter;
+	vertexFilter->SetInputData(polyData);
+	vertexFilter->Update();
+
+	vtkNew<vtkPolyDataMapper> mapper;
+	mapper->SetInputData(vertexFilter->GetOutput());
+
+	vtkNew<vtkActor> actor;
+	actor->SetMapper(mapper);
+
+	actor->GetProperty()->SetPointSize(5.0f);
+	actor->GetProperty()->SetColor(1.0, 0.0, 0.0);
+
+	//renderer->AddActor(actor);
+
+	vector<Eigen::Vector3f> toSort;
+
+	for (size_t i = 0; i < size_0; i++)
+	{
+		auto& p = points_0[i];
+
+		if (p.x() == FLT_MAX || p.y() == FLT_MAX || p.z() == FLT_MAX)
+			continue;
+		if (p.x() < -1000 || p.y() < -1000 || p.z() < -1000)
+			continue;
+		if (p.x() > 1000 || p.y() > 1000 || p.z() > 1000)
+			continue;
+
+		//VisualDebugging::AddSphere("patch", p, { 0.05f, 0.05f, 0.05f }, { 0.0f, 0.0f, 0.0f }, 255, 0, 0);
+
+		toSort.push_back(p);
+	}
+
+	auto result = CUDA::BitonicSort(toSort.data(), toSort.size());
+	for (size_t i = 0; i < result.size(); i++)
+	{
+		auto& p = result[i];
+
+		VisualDebugging::AddSphere("Sorted", p, { 0.05f, 0.05f, 0.05f }, { 0.0f, 0.0f, 0.0f }, 0, 0, 255);
+
+		//printf("%f, %f, %f\n", p.x(), p.y(), p.z());
+	}
 
 	//for (int h = 0; h < 160; h++)
 	//{
@@ -258,17 +394,117 @@ void LoadPatch(int patchID)
 	//}
 }
 
+Eigen::Vector3f FindMedian(int cx, int cy, int nnn, int fallbackCount = 100)
+{
+	int currentOffset = 0;
+	int found = 0;
+	fallbackCount += nnn;
+	vector<float> foundX;
+	vector<float> foundY;
+	vector<float> foundZ;
+	//while (currentOffset <= offset)
+	while (found <= nnn)
+	{
+		fallbackCount--;
+		if (fallbackCount < 0) break;
+
+		for (int y = -currentOffset; y <= currentOffset; y++)
+		{
+			if (cy + y < 0) continue;
+
+			for (int x = -currentOffset; x <= currentOffset; x++)
+			{
+				if (cx + x < 0) continue;
+
+				if ((x == -currentOffset || x == currentOffset) ||
+					(y == -currentOffset || y == currentOffset))
+				{
+					//printf("%d, %d, \n", cx + x, cy + y);
+
+					//VisualDebugging::AddSphere("Spheres", { (float)(cx + x), (float)(cy + y), 0.0f }, { 0.1f, 0.1f, 0.1f }, { 0.0f, 0.0f, 0.0f }, 255, 0, 0);
+
+					auto& p = points_0[(cy + y) * 256 + (cx + x)];
+					
+					if (FLT_MAX == p.x() || FLT_MAX == p.y() || FLT_MAX == p.z()) continue;
+
+					//VisualDebugging::AddSphere("Filtered Spheres", p, { 0.1f, 0.1f, 0.1f }, { 0.0f, 0.0f, 0.0f }, 255, 0, 0);
+
+					foundX.push_back(p.x());
+					foundY.push_back(p.y());
+					foundZ.push_back(p.z());
+					
+					found++;
+					if (found >= nnn) break;
+				}
+
+				if (found >= nnn) break;
+			}
+
+			if (found >= nnn) break;
+		}
+		currentOffset++;
+
+		if (found >= nnn) break;
+	}
+
+	//sort(foundX.begin(), foundX.end());
+	//sort(foundY.begin(), foundY.end());
+	//sort(foundZ.begin(), foundZ.end());
+
+	if (found == 0)
+		return { FLT_MAX, FLT_MAX, FLT_MAX };
+
+	else if (found == 1)
+		return { foundX[0], foundY[0], foundZ[0] };
+	else if (found % 2 == 0)
+	{
+		float x = (foundX[found / 2] + foundX[found / 2 + 1]) * 0.5f;
+		float y = (foundY[found / 2] + foundY[found / 2 + 1]) * 0.5f;
+		float z = (foundZ[found / 2] + foundZ[found / 2 + 1]) * 0.5f;
+
+		return { x, y, z };
+	}
+	else
+	{
+		return { foundX[found / 2 + 1], foundY[found / 2 + 1], foundZ[found / 2 + 1] };
+	}
+}
+
+void MedianFilter(int nnn)
+{
+	vector<Eigen::Vector3f> newPoints(256 * 480, Eigen::Vector3f(FLT_MAX, FLT_MAX, FLT_MAX));
+
+	for (int h = 0; h < 480; h++)
+	{
+		for (int w = 0; w < 256; w++)
+		{
+			newPoints[256 * h + w] = FindMedian(w, h, 3);
+		}
+	}
+
+	for (size_t i = 0; i < 256 * 480; i++)
+	{
+		auto& p = newPoints[i];
+
+		if (FLT_MAX == p.x() || FLT_MAX == p.y() || FLT_MAX == p.z()) continue;
+
+		//if (i > 100) return;
+
+		VisualDebugging::AddSphere("Filtered", p, { 0.1f, 0.1f, 0.1f }, { 0.0f, 0.0f, 0.0f }, 0, 0, 255);
+	}
+}
+
 int main() {
     openvdb::initialize();
 
-    MaximizeConsoleWindowOnMonitor(1);
+    MaximizeConsoleWindowOnMonitor(2);
 
     vtkSmartPointer<vtkRenderer> renderer = vtkSmartPointer<vtkRenderer>::New();
     renderer->SetBackground(0.3, 0.5, 0.7);
 
     vtkSmartPointer<vtkRenderWindow> renderWindow = vtkSmartPointer<vtkRenderWindow>::New();
-    //renderWindow->SetSize(1920, 1080);
-	renderWindow->SetSize(256, 480);
+    renderWindow->SetSize(1920, 1080);
+	//renderWindow->SetSize(256, 480);
     renderWindow->AddRenderer(renderer);
 
     vtkSmartPointer<vtkRenderWindowInteractor> interactor = vtkSmartPointer<vtkRenderWindowInteractor>::New();
@@ -281,9 +517,16 @@ int main() {
 
     VisualDebugging::Initialize(renderer);
 
-    MaximizeVTKWindowOnMonitor(renderWindow, 2);
+    MaximizeVTKWindowOnMonitor(renderWindow, 1);
 
-	LoadPatch(3);
+	LoadPatch(3, renderer);
+
+	//vector<Eigen::Vector3f> result = CUDA::DoFilter((Eigen::Vector3f*)points_0->data());
+	//for (auto& p : result)
+	//{
+	//	VisualDebugging::AddSphere("result", p, { 0.1f, 0.1f, 0.1f }, { 0.0f, 0.0f, 0.0f }, 0, 0, 255);
+	//}
+	////MedianFilter(30);
 
 	VisualDebugging::AddLine("axes", { 0, 0, 0 }, { (float)128, 0, 0 }, 255, 0, 0);
 	VisualDebugging::AddLine("axes", { 0, 0, 0 }, { 0, (float)240, 0 }, 0, 255, 0);
