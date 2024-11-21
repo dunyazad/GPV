@@ -25,6 +25,14 @@ void CustomTrackballStyle::OnLeftButtonDown()
     //vtkInteractorStyleTrackballCamera::OnLeftButtonDown();
 }
 
+void CustomTrackballStyle::OnMiddleButtonDown()
+{
+    MiddleButtonPressed = true;
+    std::cout << "Middle Button Pressed" << std::endl;
+
+    app->OnMouseButtonPress(1);
+}
+
 void CustomTrackballStyle::OnRightButtonDown()
 {
     RightButtonPressed = true;
@@ -49,6 +57,14 @@ void CustomTrackballStyle::OnLeftButtonUp()
     app->OnMouseButtonRelease(0);
 
     //vtkInteractorStyleTrackballCamera::OnLeftButtonUp();
+}
+
+void CustomTrackballStyle::OnMiddleButtonUp()
+{
+    MiddleButtonPressed = false;
+    std::cout << "Middle Button Released" << std::endl;
+
+    app->OnMouseButtonRelease(1);
 }
 
 void CustomTrackballStyle::OnRightButtonUp()

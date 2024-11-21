@@ -15,8 +15,10 @@ public:
     CustomTrackballStyle();
 
     virtual void OnLeftButtonDown() override;
+    virtual void OnMiddleButtonUp() override;
     virtual void OnRightButtonDown() override;
     virtual void OnLeftButtonUp() override;
+    virtual void OnMiddleButtonDown() override;
     virtual void OnRightButtonUp() override;
     void HandleBothButtons();
 
