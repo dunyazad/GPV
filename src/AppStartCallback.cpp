@@ -457,9 +457,9 @@ void AppStartCallback_Capture(App* pApp)
 
 	auto camera = renderer->GetActiveCamera();
 	camera->SetParallelProjection(true);
-	// Parallel ScaleÀº Ä«¸Þ¶ó Àý¹Ý ³ôÀÌ
-	// ÇÈ¼¿´ç 3D °ø°£ÀÇ À¯´Ö * Ã¢ ³ôÀÌ / 2
-	// ¿©±â¿¡¼± 256 x 480ÀÌ¹Ç·Î ÇÈ¼¿´ç 0.1, Ã¢³ôÀÌ 480
+	// Parallel Scaleï¿½ï¿½ Ä«ï¿½Þ¶ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
+	// ï¿½È¼ï¿½ï¿½ï¿½ 3D ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ * Ã¢ ï¿½ï¿½ï¿½ï¿½ / 2
+	// ï¿½ï¿½ï¿½â¿¡ï¿½ï¿½ 256 x 480ï¿½Ì¹Ç·ï¿½ ï¿½È¼ï¿½ï¿½ï¿½ 0.1, Ã¢ï¿½ï¿½ï¿½ï¿½ 480
 	// 480 * 0.1 / 2 = 24
 	camera->SetParallelScale(24);
 
@@ -905,7 +905,8 @@ void AppStartCallback_Octree(App* pApp)
 	VisualDebugging::AddLine("axes", { 0, 0, 0 }, { 0.0f, 0.0f, 100.0f }, Color4::Blue);
 
 	vtkNew<vtkPLYReader> reader;
-	reader->SetFileName("C:\\Resources\\3D\\PLY\\Complete\\Lower_pointcloud.ply");
+	//reader->SetFileName("C:\\Resources\\3D\\PLY\\Complete\\Lower_pointcloud.ply");
+	reader->SetFileName("./../../res/3D/Lower_pointcloud.ply");
 	reader->Update();
 
 	vtkPolyData* polyData = reader->GetOutput();

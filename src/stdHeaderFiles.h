@@ -1,7 +1,8 @@
 #pragma once
 
-#include <limits.h>
+#include <cstdio>
 #include <stdio.h>
+#include <limits.h>
 
 #include <algorithm>
 #include <chrono>
@@ -19,9 +20,11 @@
 #include <string>
 #include <vector>
 
+#ifdef _WINDOWS
 #include <omp.h>
 
 #include <Windows.h>
 #include <shellapi.h>
+#endif
 
 using namespace std;

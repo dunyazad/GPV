@@ -9,6 +9,7 @@ string Miliseconds(const chrono::steady_clock::time_point beginTime, const char*
 vtkSmartPointer<vtkPolyData> ReadPLY(const std::string& filePath);
 void WritePLY(vtkSmartPointer<vtkPolyData> data, const std::string& filePath);
 
+#ifdef _WINDOWS
 struct MonitorInfo {
     HMONITOR hMonitor;
     MONITORINFO monitorInfo;
@@ -17,3 +18,4 @@ struct MonitorInfo {
 BOOL CALLBACK MonitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonitor, LPARAM dwData);
 void MaximizeConsoleWindowOnMonitor(int monitorIndex);
 void MaximizeVTKWindowOnMonitor(vtkSmartPointer<vtkRenderWindow> renderWindow, int monitorIndex);
+#endif

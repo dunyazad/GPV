@@ -57,10 +57,12 @@ App::~App()
 
 void App::Run()
 {
+#ifdef _WINDOWS
 	if (configuration.maximizeConsoleWindow)
 	{
 		MaximizeConsoleWindowOnMonitor(1);
 	}
+#endif
 
 	renderer = vtkSmartPointer<vtkRenderer>::New();
 	renderer->SetBackground(0.3, 0.5, 0.7);
@@ -79,10 +81,12 @@ void App::Run()
 
 	VisualDebugging::Initialize(renderer);
 
+#ifdef _WINDOWS
 	if (configuration.maximizeRenderWindow)
 	{
 		MaximizeVTKWindowOnMonitor(renderWindow, 2);
 	}
+#endif
 
 	timerCallback = vtkSmartPointer<TimerCallback>::New();
 	timerCallback->SetApp(this);

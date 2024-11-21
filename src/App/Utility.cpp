@@ -28,6 +28,7 @@ void WritePLY(vtkSmartPointer<vtkPolyData> data, const std::string& filePath) {
     writer->Update();
 }
 
+#ifdef _WINDOWS
 BOOL CALLBACK MonitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonitor, LPARAM dwData) {
     std::vector<MonitorInfo>* monitors = reinterpret_cast<std::vector<MonitorInfo>*>(dwData);
     MONITORINFO monitorInfo;
@@ -77,3 +78,4 @@ void MaximizeVTKWindowOnMonitor(vtkSmartPointer<vtkRenderWindow> renderWindow, i
         ShowWindow(hwnd, SW_MAXIMIZE);
     }
 }
+#endif
