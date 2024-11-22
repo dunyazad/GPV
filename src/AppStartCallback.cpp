@@ -977,11 +977,197 @@ void AppStartCallback_Octree(App* pApp)
 	//	});
 }
 
+struct Voxel {
+	float divergence = 0.0f;
+	float scalarField = 0.0f;
+	Eigen::Vector3f color = Eigen::Vector3f(1.0f, 1.0f, 1.0f); // 초기화
+
+	Voxel() :divergence(0.0f), scalarField(0.0f), color(Eigen::Vector3f(1.0f, 1.0f, 1.0f))
+	{}
+};
+
+// Jacobi 반복법으로 스칼라 필드 계산
+void solvePoissonEquation(vector<vector<vector<Voxel>>>& grid, int iterations) {
+	int resolution = grid.size();
+	float delta = 1.0f / resolution;
+
+	for (int iter = 0; iter < iterations; ++iter) {
+		// 새로운 스칼라 필드 저장
+		vector<vector<vector<float>>> newScalarField(
+			resolution, vector<vector<float>>(
+				resolution, vector<float>(resolution, 0.0f)));
+
+		// Jacobi 반복법
+		for (int x = 1; x < resolution - 1; ++x) {
+			for (int y = 1; y < resolution - 1; ++y) {
+				for (int z = 1; z < resolution - 1; ++z) {
+					float laplacian = (
+						grid[x + 1][y][z].scalarField +
+						grid[x - 1][y][z].scalarField +
+						grid[x][y + 1][z].scalarField +
+						grid[x][y - 1][z].scalarField +
+						grid[x][y][z + 1].scalarField +
+						grid[x][y][z - 1].scalarField -
+						6.0f * grid[x][y][z].scalarField
+						) / (delta * delta);
+
+					// 포아송 방정식 갱신
+					newScalarField[x][y][z] = (laplacian - grid[x][y][z].divergence) / 6.0f;
+				}
+			}
+		}
+
+		// 스칼라 필드 업데이트
+		for (int x = 0; x < resolution; ++x) {
+			for (int y = 0; y < resolution; ++y) {
+				for (int z = 0; z < resolution; ++z) {
+					grid[x][y][z].scalarField = newScalarField[x][y][z];
+				}
+			}
+		}
+	}
+}
+
+void AppStartCallback_Poisson(App* pApp)
+{
+	auto renderer = pApp->GetRenderer();
+	//LoadModel(renderer, "C:\\Resources\\3D\\PLY\\Complete\\Lower.ply");
+
+	//VisualDebugging::AddLine("axes", { 0, 0, 0 }, { 100.0f, 0.0f, 0.0f }, Color4::Red);
+	//VisualDebugging::AddLine("axes", { 0, 0, 0 }, { 0.0f, 100.0f, 0.0f }, Color4::Green);
+	//VisualDebugging::AddLine("axes", { 0, 0, 0 }, { 0.0f, 0.0f, 100.0f }, Color4::Blue);
+
+	vtkNew<vtkPLYReader> reader;
+	//reader->SetFileName("C:\\Resources\\3D\\PLY\\Complete\\Lower_pointcloud.ply");
+	reader->SetFileName("./../../res/3D/Lower_pointcloud.ply");
+	reader->Update();
+
+	vtkPolyData* polyData = reader->GetOutput();
+
+	auto plyPoints = polyData->GetPoints();
+	float* rawPoints = static_cast<float*>(plyPoints->GetData()->GetVoidPointer(0));
+	vtkDataArray* plyNormals = polyData->GetPointData()->GetNormals();
+	float* rawNormals = static_cast<float*>(plyNormals->GetVoidPointer(0));
+	vtkUnsignedCharArray* plyColors = vtkUnsignedCharArray::SafeDownCast(polyData->GetPointData()->GetScalars());
+
+	static vector<Eigen::Vector3f> points;
+	static vector<Eigen::Vector3f> normals;
+	static vector<Color4> colors;
+
+	vector<unsigned int> pointIndices;
+
+	auto bounds = polyData->GetBounds();
+	Eigen::AlignedBox3f aabb(
+		Eigen::Vector3f{ (float)bounds[0], (float)bounds[2], (float)bounds[4] },
+		Eigen::Vector3f{ (float)bounds[1], (float)bounds[3], (float)bounds[5] });
+	Eigen::Vector3f center = aabb.center();
+
+	Eigen::Vector3f aabbDelta = aabb.max() - aabb.min() - center;
+	float axisMax = aabbDelta.x();
+	if (axisMax < aabbDelta.y()) axisMax = aabbDelta.y();
+	if (axisMax < aabbDelta.z()) axisMax = aabbDelta.z();
+
+	struct Voxel
+	{
+		int count = 0;
+		Eigen::Vector3f normal;
+		Eigen::Vector3f color;
+	};
+
+	auto t = Time::Now();
+
+	float voxelSize = 0.1f;
+	vector<Voxel> volume;
+	volume.resize(1000 * 1000 * 1000);
+
+	t = Time::End(t, "Initialize volume");
+
+	for (size_t pi = 0; pi < plyPoints->GetNumberOfPoints(); pi++)
+	{
+		pointIndices.push_back((unsigned int)pi);
+
+		auto dp = plyPoints->GetPoint(pi);
+		auto normal = plyNormals->GetTuple(pi);
+		unsigned char color[3];
+		plyColors->GetTypedTuple(pi, color);
+
+		Eigen::Vector3f point((float)dp[0] - center.x(), (float)dp[1] - center.y(), (float)dp[2] - center.z());
+		points.push_back(point);
+		Eigen::Vector3f pointNormal((float)normal[0], (float)normal[1], (float)normal[2]);
+		normals.push_back(pointNormal);
+		auto color4 = Color4(color[0], color[1], color[2], 255);
+		colors.push_back(color4);
+		Eigen::Vector3f pointColor((float)color4.x() / 255.0f, (float)color4.y() / 255.0f, (float)color4.z() / 255.0f);
+
+		//VD::AddSphere("points",
+		//	point,
+		//	{ 0.1f,0.1f,0.1f },
+		//	{ 0.0f, 0.0f, 1.0f },
+		//	Color4(color[0], color[1], color[2], 255));
+
+		int xIndex = (int)floorf((point.x() + 50.0f) / voxelSize);
+		int yIndex = (int)floorf((point.y() + 50.0f) / voxelSize);
+		int zIndex = (int)floorf((point.z() + 50.0f) / voxelSize);
+		size_t index = zIndex * 1000 * 1000 + yIndex * 1000 + xIndex;
+
+		if (volume[index].count == 0)
+		{
+			volume[index].normal = pointNormal;
+			volume[index].color = pointColor;
+			volume[index].count++;
+		}
+		else
+		{
+			volume[index].normal += pointNormal;
+			volume[index].color += pointColor;
+			volume[index].count++;
+		}
+	}
+
+	t = Time::End(t, "Integrate points");
+
+	for (size_t i = 0; i < volume.size(); i++)
+	{
+		int zIndex = i / (1000 * 1000);
+		int yIndex = (i % (1000 * 1000)) / 1000;
+		int xIndex = (i % (1000 * 1000)) % 1000;
+
+		if (0 < volume[i].count)
+		{
+			Eigen::Vector3f position((float)xIndex* voxelSize, (float)yIndex* voxelSize, (float)zIndex* voxelSize);
+
+			Eigen::Vector3f c = volume[i].color.normalized();
+			Color4 c4(255, 255, 255, 255);
+
+			c4.FromNormalzed(c.x(), c.y(), c.z(), 1.0f);
+
+			VD::AddCube("voxel", { (float)xIndex * voxelSize, (float)yIndex * voxelSize, (float)zIndex * voxelSize }, 0.05f, c4);
+			//cout << position << endl;
+
+			//VD::AddSphere("points",
+			//	{ (float)xIndex * voxelSize, (float)yIndex * voxelSize, (float)zIndex * voxelSize },
+			//	{ 0.1f,0.1f,0.1f },
+			//	{ 0.0f, 0.0f, 1.0f },
+			//	c4);
+		}
+	}
+
+	//VD::AddCube("AABC", { 0.0f, 0.0f, 0.0f }, axisMax * 0.5f, Color4::White);
+	//printf("axisMax : %f\n", axisMax);
+
+	VisualDebugging::AddLine("axes", { 0, 0, 0 }, { axisMax * 0.5f, 0.0f, 0.0f }, Color4::Red);
+	VisualDebugging::AddLine("axes", { 0, 0, 0 }, { 0.0f, axisMax * 0.5f, 0.0f }, Color4::Green);
+	VisualDebugging::AddLine("axes", { 0, 0, 0 }, { 0.0f, 0.0f, axisMax * 0.5f }, Color4::Blue);
+
+	t = Time::End(t, "Visualize");
+}
+
 void AppStartCallback(App* pApp)
 {
 	//AppStartCallback_Integrate(pApp);
 	//AppStartCallback_Convert(pApp);
 	//AppStartCallback_LoadPNT(pApp);
 	//AppStartCallback_KDTree(pApp);
-	AppStartCallback_Octree(pApp);
+	//AppStartCallback_Octree(pApp);
+	AppStartCallback_Poisson(pApp);
 }
