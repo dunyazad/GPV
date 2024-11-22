@@ -9,6 +9,16 @@ set<size_t> selectedIndices;
 
 int depthIndex = 0;
 
+
+AppEventHandler::AppEventHandler()
+{
+}
+
+AppEventHandler::~AppEventHandler()
+{
+}
+
+
 void OnKeyPress(App* app)
 {
 	vtkRenderWindowInteractor* interactor = app->GetInteractor();
@@ -217,9 +227,9 @@ void OnKeyPress(App* app)
 		VisualDebugging::AddLine("ViewDirection", zero, up, Color4::Green);
 		VisualDebugging::AddLine("ViewDirection", zero, front, Color4::Blue);
 	}
-	else if (key == "space")
+	else if (key == "App")
 	{
-		app->CaptureColorAndDepth("C:\\Resources\\2D\\Captured\\RGBD");
+		app->CaptureColorAndDepth("C:\\Resources\\2D\\Captured");
 	}
 	else if (key == "Insert")
 	{
@@ -230,6 +240,10 @@ void OnKeyPress(App* app)
 	{
 	selectedIndices.clear();
 	VD::Clear("NN");
+	}
+	else if (key == "space")
+	{
+		//interactor->InvokeEvent(vtkCommand::MouseWheelForwardEvent);
 	}
 }
 
@@ -584,4 +598,22 @@ void OnMouseMove(App* app, int posx, int posy, int lastx, int lasty, bool lButto
 	//	//VisualDebugging::AddLine("ViewDirection", cameraPosition, cameraPosition + rayDirection * 1000, Color4::Red);
 	//	VisualDebugging::AddLine("ViewDirection", cameraPosition, worldSpacePoint, Color4::Red);
 	//}
+}
+
+void OnUSBEvent(App* app, USBEvent usbEvent)
+{
+	auto interactor = app->GetInteractor();
+
+	//printf("%02X %02X %02X - %02X %02X %02X\n", a, b, c, d, e, f);
+	if (0x11 == usbEvent.data[0] && 0x0A == usbEvent.data[1]) // Big Wheel
+	{
+		if (0x01 == usbEvent.data[2]) // Right
+		{
+			interactor->InvokeEvent(vtkCommand::MouseWheelForwardEvent);
+		}
+		else if (0x02 == usbEvent.data[2]) // Left
+		{
+			interactor->InvokeEvent(vtkCommand::MouseWheelBackwardEvent);
+		}
+	}
 }

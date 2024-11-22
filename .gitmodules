@@ -1,3 +1,6 @@
 [submodule "External/eigen"]
 	path = External/eigen
 	url = https://gitlab.com/libeigen/eigen.git
+[submodule "External/hidapi"]
+	path = External/hidapi
+	url = https://github.com/libusb/hidapi

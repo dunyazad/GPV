@@ -1,6 +1,7 @@
 #include <Common.h>
 #include <App/App.h>
 #include <App/AppEventHandlers.h>
+#include <App/USBHandler.h>
 
 #include <Algorithm/KDTree.h>
 #include <Algorithm/SVO.h>

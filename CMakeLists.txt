@@ -11,9 +11,20 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_SOURCE_DIR}/bin/Debug)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_SOURCE_DIR}/bin/Release)
 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/Modules")
+
 # Find the VTK package
 find_package(VTK REQUIRED)
 include(${VTK_USE_FILE})
+
+#set(CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH};C:\\Program Files (x86)\\hidapi\\lib\\cmake\\hidapi")
+
+# message(STATUS "HDIAPI_INCLUDE_DIRS: ${HDIAPI_INCLUDE_DIRS}")
+message(STATUS "HDIAPI_LIBRARIES: ${HDIAPI_LIBRARIES}")
+
+find_package(HDIAPI REQUIRED)
+include_directories(${HDIAPI_INCLUDE_DIRS})
+link_libraries(${HDIAPI_LIBRARIES})
 
 set(source_list
     src/stdHeaderFiles.h
@@ -30,6 +41,8 @@ set(source_list
     src/App/AppEventHandlers.cpp
     src/App/CustomTrackballStyle.h
     src/App/CustomTrackballStyle.cpp
+    src/App/USBHandler.h
+    src/App/USBHandler.cpp
     src/App/Utility.h
     src/App/Utility.cpp
     src/Algorithm/SVO.h
@@ -63,8 +76,10 @@ target_include_directories(GPV PRIVATE
     ${VTK_INCLUDE_DIRS}
 )
 
-# Link the executable with the VTK libraries
-target_link_libraries(GPV ${VTK_LIBRARIES})
+target_link_libraries(GPV
+    ${VTK_LIBRARIES}
+    ${HDIAPI_LIBRARIES}
+)
 
 if(MSVC)
     set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT GPV)

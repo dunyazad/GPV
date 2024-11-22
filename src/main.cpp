@@ -17,7 +17,8 @@ int main()
 	app.AddKeyPressCallback(OnKeyPress);
 	app.AddMouseButtonPressCallback(OnMouseButtonPress);
 	app.AddMouseButtonReleaseCallback(OnMouseButtonRelease);
-	app.AddMouseMoveReleaseCallback(OnMouseMove);
+	app.AddMouseMoveCallback(OnMouseMove);
+	app.AddUSBEventCallback(OnUSBEvent);
 	app.AddAppStartCallback(AppStartCallback);
 
 	if (mode == 0)

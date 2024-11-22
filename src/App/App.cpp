@@ -46,6 +46,7 @@ void PostRenderCallback::OnPostRender()
 
 
 App::App()
+	: usbHandler(this)
 {
 	s_instances.insert(this);
 }
@@ -285,12 +286,12 @@ void App::RemoveMouseButtonReleaseCallback(const string& name)
 	}
 }
 
-void App::AddMouseMoveReleaseCallback(function<void(App*, int, int, int, int, bool, bool, bool)> f)
+void App::AddMouseMoveCallback(function<void(App*, int, int, int, int, bool, bool, bool)> f)
 {
-	AddMouseMoveReleaseCallback("Default", f);
+	AddMouseMoveCallback("Default", f);
 }
 
-void App::AddMouseMoveReleaseCallback(const string& name, function<void(App*, int, int, int, int, bool, bool, bool)> f)
+void App::AddMouseMoveCallback(const string& name, function<void(App*, int, int, int, int, bool, bool, bool)> f)
 {
 	if (0 != mouseMoveCallbacks.count(name))
 	{
@@ -299,12 +300,12 @@ void App::AddMouseMoveReleaseCallback(const string& name, function<void(App*, in
 	mouseMoveCallbacks[name] = f;
 }
 
-void App::RemoveMouseMoveReleaseCallback()
+void App::RemoveMouseMoveCallback()
 {
-	RemoveMouseMoveReleaseCallback("Default");
+	RemoveMouseMoveCallback("Default");
 }
 
-void App::RemoveMouseMoveReleaseCallback(const string& name)
+void App::RemoveMouseMoveCallback(const string& name)
 {
 	if (0 != mouseMoveCallbacks.count(name))
 	{
@@ -312,8 +313,56 @@ void App::RemoveMouseMoveReleaseCallback(const string& name)
 	}
 }
 
+void App::AddUSBEventCallback(function<void(App*, USBEvent)> f)
+{
+	AddUSBEventCallback("Default", f);
+}
+
+void App::AddUSBEventCallback(const string& name, function<void(App*, USBEvent)> f)
+{
+	if (0 != usbEventCallbacks.count(name))
+	{
+		printf("[Error] same name callback exists!");
+	}
+	usbEventCallbacks[name] = f;
+}
+
+void App::RemoveUSBEventCallback()
+{
+	RemoveUSBEventCallback("Default");
+}
+
+void App::RemoveUSBEventCallback(const string& name)
+{
+	if (0 != usbEventCallbacks.count(name))
+	{
+		usbEventCallbacks.erase(name);
+	}
+}
+
+
 void App::OnUpdate()
 {
+	for (auto& instance : s_instances)
+	{
+		USBEvent usbEvent;
+		unique_lock<mutex> lock(instance->usbEventQueueLock);
+		if (false == instance->usbEventQueue.empty())
+		{
+			usbEvent = instance->usbEventQueue.front();
+			instance->usbEventQueue.pop();
+		}
+		lock.unlock();
+
+		if (usbEvent.valid)
+		{
+			for (auto& kvp : instance->usbEventCallbacks)
+			{
+				kvp.second(instance, usbEvent);
+			}
+		}
+	}
+
 	for (auto& kvp : appUpdateCallbacks)
 	{
 		kvp.second(this);
@@ -368,6 +417,21 @@ void App::OnMouseMove(int posx, int posy, int lastx, int lasty, bool lButton, bo
 		for (auto& kvp : instance->mouseMoveCallbacks)
 		{
 			kvp.second(instance, posx, posy, lastx, lasty, lButton, mButton, rButton);
+		}
+	}
+}
+
+void App::OnUSBEvent(USBEvent usbEvent)
+{
+	for (auto& instance : s_instances)
+	{
+		for (auto& kvp : instance->usbEventCallbacks)
+		{
+			unique_lock<mutex> lock(instance->usbEventQueueLock);
+
+			instance->usbEventQueue.push(usbEvent);
+
+			lock.unlock();
 		}
 	}
 }
