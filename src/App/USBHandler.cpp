@@ -2,6 +2,8 @@
 
 #include <App/App.h>
 
+#ifdef _WINDOWS
+
 USBHandler::USBHandler(App* pApp)
 	: pApp(pApp), mainThread(nullptr), needToQuit(false)
 {
@@ -102,3 +104,5 @@ USBHandler::~USBHandler()
 
 	hid_exit();
 }
+
+#endif

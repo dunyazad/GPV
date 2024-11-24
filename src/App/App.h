@@ -110,10 +110,12 @@ public:
     void RemoveMouseMoveCallback();
     void RemoveMouseMoveCallback(const string& name);
 
+#ifdef _WINDOWS
     void AddUSBEventCallback(function<void(App*, USBEvent)> f);
     void AddUSBEventCallback(const string& name, function<void(App*, USBEvent)> f);
     void RemoveUSBEventCallback();
     void RemoveUSBEventCallback(const string& name);
+#endif
 
     void OnUpdate();
     void OnPostRender();
@@ -156,11 +158,13 @@ private:
     map<string, function<void(App*, int)>> mouseButtonReleaseCallbacks;
     map<string, function<void(App*, int, int, int, int, bool, bool, bool)>> mouseMoveCallbacks;
 
+#ifdef _WINDOWS
     map<string, function<void(App*, USBEvent)>> usbEventCallbacks;
-
-    bool captureEnabled = false;
 
     USBHandler usbHandler;
     mutex usbEventQueueLock;
     queue<USBEvent> usbEventQueue;
+#endif
+
+    bool captureEnabled = false;
 };

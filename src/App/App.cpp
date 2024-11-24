@@ -313,6 +313,7 @@ void App::RemoveMouseMoveCallback(const string& name)
 	}
 }
 
+#ifdef _WINDOWS
 void App::AddUSBEventCallback(function<void(App*, USBEvent)> f)
 {
 	AddUSBEventCallback("Default", f);
@@ -339,10 +340,11 @@ void App::RemoveUSBEventCallback(const string& name)
 		usbEventCallbacks.erase(name);
 	}
 }
-
+#endif
 
 void App::OnUpdate()
 {
+#ifdef _WINDOWS
 	for (auto& instance : s_instances)
 	{
 		USBEvent usbEvent;
@@ -362,6 +364,7 @@ void App::OnUpdate()
 			}
 		}
 	}
+#endif
 
 	for (auto& kvp : appUpdateCallbacks)
 	{
@@ -421,6 +424,7 @@ void App::OnMouseMove(int posx, int posy, int lastx, int lasty, bool lButton, bo
 	}
 }
 
+#ifdef _WINDOWS
 void App::OnUSBEvent(USBEvent usbEvent)
 {
 	for (auto& instance : s_instances)
@@ -435,6 +439,7 @@ void App::OnUSBEvent(USBEvent usbEvent)
 		}
 	}
 }
+#endif
 
 void App::CaptureColorAndDepth(const string& saveDirectory)
 {

@@ -1,5 +1,7 @@
 #pragma once
 
+#ifdef _WINDOWS
+
 #include <Common.h>
 #include <hidapi.h>
 
@@ -29,3 +31,5 @@ private:
 	thread* mainThread = nullptr;
 	bool needToQuit = false;
 };
+
+#endif

@@ -19,12 +19,14 @@ include(${VTK_USE_FILE})
 
 #set(CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH};C:\\Program Files (x86)\\hidapi\\lib\\cmake\\hidapi")
 
+IF (WIN32)
 # message(STATUS "HDIAPI_INCLUDE_DIRS: ${HDIAPI_INCLUDE_DIRS}")
-message(STATUS "HDIAPI_LIBRARIES: ${HDIAPI_LIBRARIES}")
+# message(STATUS "HDIAPI_LIBRARIES: ${HDIAPI_LIBRARIES}")
 
 find_package(HDIAPI REQUIRED)
 include_directories(${HDIAPI_INCLUDE_DIRS})
 link_libraries(${HDIAPI_LIBRARIES})
+ENDIF()
 
 set(source_list
     src/stdHeaderFiles.h
