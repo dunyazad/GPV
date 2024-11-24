@@ -600,6 +600,7 @@ void OnMouseMove(App* app, int posx, int posy, int lastx, int lasty, bool lButto
 	//}
 }
 
+#ifdef _WINDOWS
 void OnUSBEvent(App* app, USBEvent usbEvent)
 {
 	auto interactor = app->GetInteractor();
@@ -617,3 +618,4 @@ void OnUSBEvent(App* app, USBEvent usbEvent)
 		}
 	}
 }
+#endif

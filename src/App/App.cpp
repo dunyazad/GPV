@@ -46,7 +46,9 @@ void PostRenderCallback::OnPostRender()
 
 
 App::App()
+#ifdef _WINDOWS
 	: usbHandler(this)
+#endif
 {
 	s_instances.insert(this);
 }

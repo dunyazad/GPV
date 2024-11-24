@@ -127,7 +127,9 @@ public:
     static void OnMouseButtonPress(int button);
     static void OnMouseButtonRelease(int button);
     static void OnMouseMove(int posx, int posy, int lastx, int lasty, bool lButton, bool mButton, bool rButton);
+#ifdef _WINDOWS
     static void OnUSBEvent(USBEvent usbEvent);
+#endif
 
     inline vtkSmartPointer<vtkRenderer> GetRenderer() const { return renderer; }
     inline vtkSmartPointer<vtkRenderWindow> GetRenderWindow() const { return renderWindow; }

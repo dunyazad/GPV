@@ -1099,11 +1099,11 @@ void AppStartCallback_Poisson(App* pApp)
 		colors.push_back(color4);
 		Eigen::Vector3f pointColor((float)color4.x() / 255.0f, (float)color4.y() / 255.0f, (float)color4.z() / 255.0f);
 
-		//VD::AddSphere("points",
-		//	point,
-		//	{ 0.1f,0.1f,0.1f },
-		//	{ 0.0f, 0.0f, 1.0f },
-		//	Color4(color[0], color[1], color[2], 255));
+		VD::AddSphere("points",
+			point,
+			{ 0.1f,0.1f,0.1f },
+			{ 0.0f, 0.0f, 1.0f },
+			Color4(color[0], color[1], color[2], 255));
 
 		int xIndex = (int)floorf((point.x() + 50.0f) / voxelSize);
 		int yIndex = (int)floorf((point.y() + 50.0f) / voxelSize);
@@ -1141,7 +1141,7 @@ void AppStartCallback_Poisson(App* pApp)
 
 			c4.FromNormalzed(c.x(), c.y(), c.z(), 1.0f);
 
-			VD::AddCube("voxel", { (float)xIndex * voxelSize, (float)yIndex * voxelSize, (float)zIndex * voxelSize }, 0.05f, c4);
+			//VD::AddCube("voxel", { (float)xIndex * voxelSize, (float)yIndex * voxelSize, (float)zIndex * voxelSize }, 0.05f, c4);
 			//cout << position << endl;
 
 			//VD::AddSphere("points",

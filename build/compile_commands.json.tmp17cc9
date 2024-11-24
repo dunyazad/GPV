@@ -1,0 +1,106 @@
+[
+{
+  "directory": "/Users/aaron/Desktop/Workspace/GPV/build",
+  "command": "/usr/bin/clang++ -DBOOST_SERIALIZATION_DYN_LINK -DBOOST_SERIALIZATION_NO_LIB -DDIY_NO_THREADS -DFMT_SHARED -DGL_SILENCE_DEPRECATION -DH5_BUILT_AS_DYNAMIC_LIB -DQT_CORE_LIB -DQT_GUI_LIB -DQT_NETWORK_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_QMLBUILTINS_LIB -DQT_QMLINTEGRATION_LIB -DQT_QMLMODELS_LIB -DQT_QML_LIB -DQT_QUICK_LIB -DQT_SQL_LIB -DQT_WIDGETS_LIB -DVTK_HAS_OGGTHEORA_SUPPORT -Dkiss_fft_scalar=double -g -std=gnu++17 -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk -mmacosx-version-min=14.6 -iframework /opt/homebrew/lib  -o CMakeFiles/GPV.dir/src/Common.cpp.o -c /Users/aaron/Desktop/Workspace/GPV/src/Common.cpp",
+  "file": "/Users/aaron/Desktop/Workspace/GPV/src/Common.cpp",
+  "output": "CMakeFiles/GPV.dir/src/Common.cpp.o"
+},
+{
+  "directory": "/Users/aaron/Desktop/Workspace/GPV/build",
+  "command": "/usr/bin/clang++ -DBOOST_SERIALIZATION_DYN_LINK -DBOOST_SERIALIZATION_NO_LIB -DDIY_NO_THREADS -DFMT_SHARED -DGL_SILENCE_DEPRECATION -DH5_BUILT_AS_DYNAMIC_LIB -DQT_CORE_LIB -DQT_GUI_LIB -DQT_NETWORK_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_QMLBUILTINS_LIB -DQT_QMLINTEGRATION_LIB -DQT_QMLMODELS_LIB -DQT_QML_LIB -DQT_QUICK_LIB -DQT_SQL_LIB -DQT_WIDGETS_LIB -DVTK_HAS_OGGTHEORA_SUPPORT -Dkiss_fft_scalar=double -g -std=gnu++17 -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk -mmacosx-version-min=14.6 -iframework /opt/homebrew/lib  -o CMakeFiles/GPV.dir/src/Color.cpp.o -c /Users/aaron/Desktop/Workspace/GPV/src/Color.cpp",
+  "file": "/Users/aaron/Desktop/Workspace/GPV/src/Color.cpp",
+  "output": "CMakeFiles/GPV.dir/src/Color.cpp.o"
+},
+{
+  "directory": "/Users/aaron/Desktop/Workspace/GPV/build",
+  "command": "/usr/bin/clang++ -DBOOST_SERIALIZATION_DYN_LINK -DBOOST_SERIALIZATION_NO_LIB -DDIY_NO_THREADS -DFMT_SHARED -DGL_SILENCE_DEPRECATION -DH5_BUILT_AS_DYNAMIC_LIB -DQT_CORE_LIB -DQT_GUI_LIB -DQT_NETWORK_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_QMLBUILTINS_LIB -DQT_QMLINTEGRATION_LIB -DQT_QMLMODELS_LIB -DQT_QML_LIB -DQT_QUICK_LIB -DQT_SQL_LIB -DQT_WIDGETS_LIB -DVTK_HAS_OGGTHEORA_SUPPORT -Dkiss_fft_scalar=double -g -std=gnu++17 -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk -mmacosx-version-min=14.6 -iframework /opt/homebrew/lib  -o CMakeFiles/GPV.dir/src/Max.cpp.o -c /Users/aaron/Desktop/Workspace/GPV/src/Max.cpp",
+  "file": "/Users/aaron/Desktop/Workspace/GPV/src/Max.cpp",
+  "output": "CMakeFiles/GPV.dir/src/Max.cpp.o"
+},
+{
+  "directory": "/Users/aaron/Desktop/Workspace/GPV/build",
+  "command": "/usr/bin/clang++ -DBOOST_SERIALIZATION_DYN_LINK -DBOOST_SERIALIZATION_NO_LIB -DDIY_NO_THREADS -DFMT_SHARED -DGL_SILENCE_DEPRECATION -DH5_BUILT_AS_DYNAMIC_LIB -DQT_CORE_LIB -DQT_GUI_LIB -DQT_NETWORK_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_QMLBUILTINS_LIB -DQT_QMLINTEGRATION_LIB -DQT_QMLMODELS_LIB -DQT_QML_LIB -DQT_QUICK_LIB -DQT_SQL_LIB -DQT_WIDGETS_LIB -DVTK_HAS_OGGTHEORA_SUPPORT -Dkiss_fft_scalar=double -g -std=gnu++17 -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk -mmacosx-version-min=14.6 -iframework /opt/homebrew/lib  -o CMakeFiles/GPV.dir/src/App/App.cpp.o -c /Users/aaron/Desktop/Workspace/GPV/src/App/App.cpp",
+  "file": "/Users/aaron/Desktop/Workspace/GPV/src/App/App.cpp",
+  "output": "CMakeFiles/GPV.dir/src/App/App.cpp.o"
+},
+{
+  "directory": "/Users/aaron/Desktop/Workspace/GPV/build",
+  "command": "/usr/bin/clang++ -DBOOST_SERIALIZATION_DYN_LINK -DBOOST_SERIALIZATION_NO_LIB -DDIY_NO_THREADS -DFMT_SHARED -DGL_SILENCE_DEPRECATION -DH5_BUILT_AS_DYNAMIC_LIB -DQT_CORE_LIB -DQT_GUI_LIB -DQT_NETWORK_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_QMLBUILTINS_LIB -DQT_QMLINTEGRATION_LIB -DQT_QMLMODELS_LIB -DQT_QML_LIB -DQT_QUICK_LIB -DQT_SQL_LIB -DQT_WIDGETS_LIB -DVTK_HAS_OGGTHEORA_SUPPORT -Dkiss_fft_scalar=double -g -std=gnu++17 -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk -mmacosx-version-min=14.6 -iframework /opt/homebrew/lib  -o CMakeFiles/GPV.dir/src/App/AppEventHandlers.cpp.o -c /Users/aaron/Desktop/Workspace/GPV/src/App/AppEventHandlers.cpp",
+  "file": "/Users/aaron/Desktop/Workspace/GPV/src/App/AppEventHandlers.cpp",
+  "output": "CMakeFiles/GPV.dir/src/App/AppEventHandlers.cpp.o"
+},
+{
+  "directory": "/Users/aaron/Desktop/Workspace/GPV/build",
+  "command": "/usr/bin/clang++ -DBOOST_SERIALIZATION_DYN_LINK -DBOOST_SERIALIZATION_NO_LIB -DDIY_NO_THREADS -DFMT_SHARED -DGL_SILENCE_DEPRECATION -DH5_BUILT_AS_DYNAMIC_LIB -DQT_CORE_LIB -DQT_GUI_LIB -DQT_NETWORK_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_QMLBUILTINS_LIB -DQT_QMLINTEGRATION_LIB -DQT_QMLMODELS_LIB -DQT_QML_LIB -DQT_QUICK_LIB -DQT_SQL_LIB -DQT_WIDGETS_LIB -DVTK_HAS_OGGTHEORA_SUPPORT -Dkiss_fft_scalar=double -g -std=gnu++17 -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk -mmacosx-version-min=14.6 -iframework /opt/homebrew/lib  -o CMakeFiles/GPV.dir/src/App/CustomTrackballStyle.cpp.o -c /Users/aaron/Desktop/Workspace/GPV/src/App/CustomTrackballStyle.cpp",
+  "file": "/Users/aaron/Desktop/Workspace/GPV/src/App/CustomTrackballStyle.cpp",
+  "output": "CMakeFiles/GPV.dir/src/App/CustomTrackballStyle.cpp.o"
+},
+{
+  "directory": "/Users/aaron/Desktop/Workspace/GPV/build",
+  "command": "/usr/bin/clang++ -DBOOST_SERIALIZATION_DYN_LINK -DBOOST_SERIALIZATION_NO_LIB -DDIY_NO_THREADS -DFMT_SHARED -DGL_SILENCE_DEPRECATION -DH5_BUILT_AS_DYNAMIC_LIB -DQT_CORE_LIB -DQT_GUI_LIB -DQT_NETWORK_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_QMLBUILTINS_LIB -DQT_QMLINTEGRATION_LIB -DQT_QMLMODELS_LIB -DQT_QML_LIB -DQT_QUICK_LIB -DQT_SQL_LIB -DQT_WIDGETS_LIB -DVTK_HAS_OGGTHEORA_SUPPORT -Dkiss_fft_scalar=double -g -std=gnu++17 -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk -mmacosx-version-min=14.6 -iframework /opt/homebrew/lib  -o CMakeFiles/GPV.dir/src/App/USBHandler.cpp.o -c /Users/aaron/Desktop/Workspace/GPV/src/App/USBHandler.cpp",
+  "file": "/Users/aaron/Desktop/Workspace/GPV/src/App/USBHandler.cpp",
+  "output": "CMakeFiles/GPV.dir/src/App/USBHandler.cpp.o"
+},
+{
+  "directory": "/Users/aaron/Desktop/Workspace/GPV/build",
+  "command": "/usr/bin/clang++ -DBOOST_SERIALIZATION_DYN_LINK -DBOOST_SERIALIZATION_NO_LIB -DDIY_NO_THREADS -DFMT_SHARED -DGL_SILENCE_DEPRECATION -DH5_BUILT_AS_DYNAMIC_LIB -DQT_CORE_LIB -DQT_GUI_LIB -DQT_NETWORK_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_QMLBUILTINS_LIB -DQT_QMLINTEGRATION_LIB -DQT_QMLMODELS_LIB -DQT_QML_LIB -DQT_QUICK_LIB -DQT_SQL_LIB -DQT_WIDGETS_LIB -DVTK_HAS_OGGTHEORA_SUPPORT -Dkiss_fft_scalar=double -g -std=gnu++17 -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk -mmacosx-version-min=14.6 -iframework /opt/homebrew/lib  -o CMakeFiles/GPV.dir/src/App/Utility.cpp.o -c /Users/aaron/Desktop/Workspace/GPV/src/App/Utility.cpp",
+  "file": "/Users/aaron/Desktop/Workspace/GPV/src/App/Utility.cpp",
+  "output": "CMakeFiles/GPV.dir/src/App/Utility.cpp.o"
+},
+{
+  "directory": "/Users/aaron/Desktop/Workspace/GPV/build",
+  "command": "/usr/bin/clang++ -DBOOST_SERIALIZATION_DYN_LINK -DBOOST_SERIALIZATION_NO_LIB -DDIY_NO_THREADS -DFMT_SHARED -DGL_SILENCE_DEPRECATION -DH5_BUILT_AS_DYNAMIC_LIB -DQT_CORE_LIB -DQT_GUI_LIB -DQT_NETWORK_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_QMLBUILTINS_LIB -DQT_QMLINTEGRATION_LIB -DQT_QMLMODELS_LIB -DQT_QML_LIB -DQT_QUICK_LIB -DQT_SQL_LIB -DQT_WIDGETS_LIB -DVTK_HAS_OGGTHEORA_SUPPORT -Dkiss_fft_scalar=double -g -std=gnu++17 -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk -mmacosx-version-min=14.6 -iframework /opt/homebrew/lib  -o CMakeFiles/GPV.dir/src/Algorithm/SVO.cpp.o -c /Users/aaron/Desktop/Workspace/GPV/src/Algorithm/SVO.cpp",
+  "file": "/Users/aaron/Desktop/Workspace/GPV/src/Algorithm/SVO.cpp",
+  "output": "CMakeFiles/GPV.dir/src/Algorithm/SVO.cpp.o"
+},
+{
+  "directory": "/Users/aaron/Desktop/Workspace/GPV/build",
+  "command": "/usr/bin/clang++ -DBOOST_SERIALIZATION_DYN_LINK -DBOOST_SERIALIZATION_NO_LIB -DDIY_NO_THREADS -DFMT_SHARED -DGL_SILENCE_DEPRECATION -DH5_BUILT_AS_DYNAMIC_LIB -DQT_CORE_LIB -DQT_GUI_LIB -DQT_NETWORK_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_QMLBUILTINS_LIB -DQT_QMLINTEGRATION_LIB -DQT_QMLMODELS_LIB -DQT_QML_LIB -DQT_QUICK_LIB -DQT_SQL_LIB -DQT_WIDGETS_LIB -DVTK_HAS_OGGTHEORA_SUPPORT -Dkiss_fft_scalar=double -g -std=gnu++17 -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk -mmacosx-version-min=14.6 -iframework /opt/homebrew/lib  -o CMakeFiles/GPV.dir/src/Algorithm/KDTree.cpp.o -c /Users/aaron/Desktop/Workspace/GPV/src/Algorithm/KDTree.cpp",
+  "file": "/Users/aaron/Desktop/Workspace/GPV/src/Algorithm/KDTree.cpp",
+  "output": "CMakeFiles/GPV.dir/src/Algorithm/KDTree.cpp.o"
+},
+{
+  "directory": "/Users/aaron/Desktop/Workspace/GPV/build",
+  "command": "/usr/bin/clang++ -DBOOST_SERIALIZATION_DYN_LINK -DBOOST_SERIALIZATION_NO_LIB -DDIY_NO_THREADS -DFMT_SHARED -DGL_SILENCE_DEPRECATION -DH5_BUILT_AS_DYNAMIC_LIB -DQT_CORE_LIB -DQT_GUI_LIB -DQT_NETWORK_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_QMLBUILTINS_LIB -DQT_QMLINTEGRATION_LIB -DQT_QMLMODELS_LIB -DQT_QML_LIB -DQT_QUICK_LIB -DQT_SQL_LIB -DQT_WIDGETS_LIB -DVTK_HAS_OGGTHEORA_SUPPORT -Dkiss_fft_scalar=double -g -std=gnu++17 -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk -mmacosx-version-min=14.6 -iframework /opt/homebrew/lib  -o CMakeFiles/GPV.dir/src/Algorithm/CustomPolyDataFilter.cpp.o -c /Users/aaron/Desktop/Workspace/GPV/src/Algorithm/CustomPolyDataFilter.cpp",
+  "file": "/Users/aaron/Desktop/Workspace/GPV/src/Algorithm/CustomPolyDataFilter.cpp",
+  "output": "CMakeFiles/GPV.dir/src/Algorithm/CustomPolyDataFilter.cpp.o"
+},
+{
+  "directory": "/Users/aaron/Desktop/Workspace/GPV/build",
+  "command": "/usr/bin/clang++ -DBOOST_SERIALIZATION_DYN_LINK -DBOOST_SERIALIZATION_NO_LIB -DDIY_NO_THREADS -DFMT_SHARED -DGL_SILENCE_DEPRECATION -DH5_BUILT_AS_DYNAMIC_LIB -DQT_CORE_LIB -DQT_GUI_LIB -DQT_NETWORK_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_QMLBUILTINS_LIB -DQT_QMLINTEGRATION_LIB -DQT_QMLMODELS_LIB -DQT_QML_LIB -DQT_QUICK_LIB -DQT_SQL_LIB -DQT_WIDGETS_LIB -DVTK_HAS_OGGTHEORA_SUPPORT -Dkiss_fft_scalar=double -g -std=gnu++17 -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk -mmacosx-version-min=14.6 -iframework /opt/homebrew/lib  -o CMakeFiles/GPV.dir/src/Algorithm/vtkMedianFilter.cpp.o -c /Users/aaron/Desktop/Workspace/GPV/src/Algorithm/vtkMedianFilter.cpp",
+  "file": "/Users/aaron/Desktop/Workspace/GPV/src/Algorithm/vtkMedianFilter.cpp",
+  "output": "CMakeFiles/GPV.dir/src/Algorithm/vtkMedianFilter.cpp.o"
+},
+{
+  "directory": "/Users/aaron/Desktop/Workspace/GPV/build",
+  "command": "/usr/bin/clang++ -DBOOST_SERIALIZATION_DYN_LINK -DBOOST_SERIALIZATION_NO_LIB -DDIY_NO_THREADS -DFMT_SHARED -DGL_SILENCE_DEPRECATION -DH5_BUILT_AS_DYNAMIC_LIB -DQT_CORE_LIB -DQT_GUI_LIB -DQT_NETWORK_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_QMLBUILTINS_LIB -DQT_QMLINTEGRATION_LIB -DQT_QMLMODELS_LIB -DQT_QML_LIB -DQT_QUICK_LIB -DQT_SQL_LIB -DQT_WIDGETS_LIB -DVTK_HAS_OGGTHEORA_SUPPORT -Dkiss_fft_scalar=double -g -std=gnu++17 -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk -mmacosx-version-min=14.6 -iframework /opt/homebrew/lib  -o CMakeFiles/GPV.dir/src/Algorithm/vtkQuantizingFilter.cpp.o -c /Users/aaron/Desktop/Workspace/GPV/src/Algorithm/vtkQuantizingFilter.cpp",
+  "file": "/Users/aaron/Desktop/Workspace/GPV/src/Algorithm/vtkQuantizingFilter.cpp",
+  "output": "CMakeFiles/GPV.dir/src/Algorithm/vtkQuantizingFilter.cpp.o"
+},
+{
+  "directory": "/Users/aaron/Desktop/Workspace/GPV/build",
+  "command": "/usr/bin/clang++ -DBOOST_SERIALIZATION_DYN_LINK -DBOOST_SERIALIZATION_NO_LIB -DDIY_NO_THREADS -DFMT_SHARED -DGL_SILENCE_DEPRECATION -DH5_BUILT_AS_DYNAMIC_LIB -DQT_CORE_LIB -DQT_GUI_LIB -DQT_NETWORK_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_QMLBUILTINS_LIB -DQT_QMLINTEGRATION_LIB -DQT_QMLMODELS_LIB -DQT_QML_LIB -DQT_QUICK_LIB -DQT_SQL_LIB -DQT_WIDGETS_LIB -DVTK_HAS_OGGTHEORA_SUPPORT -Dkiss_fft_scalar=double -g -std=gnu++17 -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk -mmacosx-version-min=14.6 -iframework /opt/homebrew/lib  -o CMakeFiles/GPV.dir/src/Debugging/VisualDebugging.cpp.o -c /Users/aaron/Desktop/Workspace/GPV/src/Debugging/VisualDebugging.cpp",
+  "file": "/Users/aaron/Desktop/Workspace/GPV/src/Debugging/VisualDebugging.cpp",
+  "output": "CMakeFiles/GPV.dir/src/Debugging/VisualDebugging.cpp.o"
+},
+{
+  "directory": "/Users/aaron/Desktop/Workspace/GPV/build",
+  "command": "/usr/bin/clang++ -DBOOST_SERIALIZATION_DYN_LINK -DBOOST_SERIALIZATION_NO_LIB -DDIY_NO_THREADS -DFMT_SHARED -DGL_SILENCE_DEPRECATION -DH5_BUILT_AS_DYNAMIC_LIB -DQT_CORE_LIB -DQT_GUI_LIB -DQT_NETWORK_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_QMLBUILTINS_LIB -DQT_QMLINTEGRATION_LIB -DQT_QMLMODELS_LIB -DQT_QML_LIB -DQT_QUICK_LIB -DQT_SQL_LIB -DQT_WIDGETS_LIB -DVTK_HAS_OGGTHEORA_SUPPORT -Dkiss_fft_scalar=double -g -std=gnu++17 -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk -mmacosx-version-min=14.6 -iframework /opt/homebrew/lib  -o CMakeFiles/GPV.dir/src/Debugging/VisualDebuggingLayer.cpp.o -c /Users/aaron/Desktop/Workspace/GPV/src/Debugging/VisualDebuggingLayer.cpp",
+  "file": "/Users/aaron/Desktop/Workspace/GPV/src/Debugging/VisualDebuggingLayer.cpp",
+  "output": "CMakeFiles/GPV.dir/src/Debugging/VisualDebuggingLayer.cpp.o"
+},
+{
+  "directory": "/Users/aaron/Desktop/Workspace/GPV/build",
+  "command": "/usr/bin/clang++ -DBOOST_SERIALIZATION_DYN_LINK -DBOOST_SERIALIZATION_NO_LIB -DDIY_NO_THREADS -DFMT_SHARED -DGL_SILENCE_DEPRECATION -DH5_BUILT_AS_DYNAMIC_LIB -DQT_CORE_LIB -DQT_GUI_LIB -DQT_NETWORK_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_QMLBUILTINS_LIB -DQT_QMLINTEGRATION_LIB -DQT_QMLMODELS_LIB -DQT_QML_LIB -DQT_QUICK_LIB -DQT_SQL_LIB -DQT_WIDGETS_LIB -DVTK_HAS_OGGTHEORA_SUPPORT -Dkiss_fft_scalar=double -g -std=gnu++17 -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk -mmacosx-version-min=14.6 -iframework /opt/homebrew/lib  -o CMakeFiles/GPV.dir/src/Debugging/vtkPolygonalFrustumSource.cxx.o -c /Users/aaron/Desktop/Workspace/GPV/src/Debugging/vtkPolygonalFrustumSource.cxx",
+  "file": "/Users/aaron/Desktop/Workspace/GPV/src/Debugging/vtkPolygonalFrustumSource.cxx",
+  "output": "CMakeFiles/GPV.dir/src/Debugging/vtkPolygonalFrustumSource.cxx.o"
+},
+{
+  "directory": "/Users/aaron/Desktop/Workspace/GPV/build",
+  "command": "/usr/bin/clang++ -DBOOST_SERIALIZATION_DYN_LINK -DBOOST_SERIALIZATION_NO_LIB -DDIY_NO_THREADS -DFMT_SHARED -DGL_SILENCE_DEPRECATION -DH5_BUILT_AS_DYNAMIC_LIB -DQT_CORE_LIB -DQT_GUI_LIB -DQT_NETWORK_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_QMLBUILTINS_LIB -DQT_QMLINTEGRATION_LIB -DQT_QMLMODELS_LIB -DQT_QML_LIB -DQT_QUICK_LIB -DQT_SQL_LIB -DQT_WIDGETS_LIB -DVTK_HAS_OGGTHEORA_SUPPORT -Dkiss_fft_scalar=double -g -std=gnu++17 -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk -mmacosx-version-min=14.6 -iframework /opt/homebrew/lib  -o CMakeFiles/GPV.dir/src/AppStartCallback.cpp.o -c /Users/aaron/Desktop/Workspace/GPV/src/AppStartCallback.cpp",
+  "file": "/Users/aaron/Desktop/Workspace/GPV/src/AppStartCallback.cpp",
+  "output": "CMakeFiles/GPV.dir/src/AppStartCallback.cpp.o"
+},
+{
+  "directory": "/Users/aaron/Desktop/Workspace/GPV/build",
+  "command": "/usr/bin/clang++ -DBOOST_SERIALIZATION_DYN_LINK -DBOOST_SERIALIZATION_NO_LIB -DDIY_NO_THREADS -DFMT_SHARED -DGL_SILENCE_DEPRECATION -DH5_BUILT_AS_DYNAMIC_LIB -DQT_CORE_LIB -DQT_GUI_LIB -DQT_NETWORK_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_QMLBUILTINS_LIB -D
