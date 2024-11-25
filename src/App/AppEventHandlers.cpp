@@ -5,6 +5,8 @@
 #include <Debugging/VisualDebugging.h>
 using VD = VisualDebugging;
 
+Eigen::Vector3f lastSelectionPoint(FLT_MAX, FLT_MAX, FLT_MAX);
+
 set<size_t> selectedIndices;
 
 int depthIndex = 0;
@@ -249,8 +251,50 @@ void OnKeyPress(App* app)
 
 void OnMouseButtonPress(App* app, int button)
 {
+	vtkRenderWindowInteractor* interactor = app->GetInteractor();
+	vtkRenderWindow* renderWindow = interactor->GetRenderWindow();
+	vtkRenderer* renderer = renderWindow->GetRenderers()->GetFirstRenderer();
+	vtkCamera* camera = renderer->GetActiveCamera();
+
 	if (button == 0)
 	{
+		int* mousePos = interactor->GetEventPosition();
+		int mouseX = mousePos[0];
+		int mouseY = mousePos[1];
+
+		int* size = renderWindow->GetSize();
+		int screenWidth = size[0];
+		int screenHeight = size[1];
+
+		float depth = 0.5f;
+		//depth = 1.0f;
+
+		auto t = Time::Now();
+
+		float ndcX = (2.0f * mouseX) / screenWidth - 1.0f;
+		float ndcY = (2.0f * mouseY) / screenHeight - 1.0f;
+
+		Eigen::Vector4f clipSpacePoint(ndcX, ndcY, depth, 1.0f);
+
+		auto viewMatrix = vtkToEigen(camera->GetViewTransformMatrix());
+		auto projectionMatrix = vtkToEigen(camera->GetProjectionTransformMatrix((float)screenWidth / (float)screenHeight, -1, 1));
+
+		Eigen::Matrix4f viewProjectionMatrix = projectionMatrix * viewMatrix;
+		Eigen::Matrix4f inverseVPMatrix = viewProjectionMatrix.inverse();
+		Eigen::Vector4f worldSpacePoint4 = inverseVPMatrix * clipSpacePoint;
+		if (worldSpacePoint4.w() != 0.0f) {
+			worldSpacePoint4 /= worldSpacePoint4.w();
+		}
+		Eigen::Vector3f worldSpacePoint = worldSpacePoint4.head<3>();
+
+		Eigen::Matrix4f inverseViewMatrix = viewMatrix.inverse();
+
+		/*Eigen::Vector3f viewDirection = -inverseViewMatrix.block<3, 1>(0, 2);
+		viewDirection.normalize();*/
+
+		Eigen::Vector3f cameraPosition = inverseViewMatrix.block<3, 1>(0, 3);
+		lastSelectionPoint = cameraPosition;
+
 		//selectedIndices.clear();
 		//VD::Clear("NN");
 	}
@@ -277,179 +321,74 @@ void OnMouseButtonRelease(App* app, int button)
 
 	if (1 == button)
 	{
-		//auto t = Time::Now();
+		lastSelectionPoint = Eigen::Vector3f(FLT_MAX, FLT_MAX, FLT_MAX);
 
-		//float ndcX = (2.0f * mouseX) / screenWidth - 1.0f;
-		//float ndcY = (2.0f * mouseY) / screenHeight - 1.0f;
+		auto t = Time::Now();
 
-		//Eigen::Vector4f clipSpacePoint(ndcX, ndcY, depth, 1.0f);
+		float ndcX = (2.0f * mouseX) / screenWidth - 1.0f;
+		float ndcY = (2.0f * mouseY) / screenHeight - 1.0f;
 
-		//auto viewMatrix = vtkToEigen(camera->GetViewTransformMatrix());
-		//auto projectionMatrix = vtkToEigen(camera->GetProjectionTransformMatrix((float)screenWidth / (float)screenHeight, -1, 1));
+		Eigen::Vector4f clipSpacePoint(ndcX, ndcY, depth, 1.0f);
 
-		//Eigen::Matrix4f viewProjectionMatrix = projectionMatrix * viewMatrix;
-		//Eigen::Matrix4f inverseVPMatrix = viewProjectionMatrix.inverse();
-		//Eigen::Vector4f worldSpacePoint4 = inverseVPMatrix * clipSpacePoint;
-		//if (worldSpacePoint4.w() != 0.0f) {
-		//	worldSpacePoint4 /= worldSpacePoint4.w();
-		//}
-		//Eigen::Vector3f worldSpacePoint = worldSpacePoint4.head<3>();
+		auto viewMatrix = vtkToEigen(camera->GetViewTransformMatrix());
+		auto projectionMatrix = vtkToEigen(camera->GetProjectionTransformMatrix((float)screenWidth / (float)screenHeight, -1, 1));
 
-		//Eigen::Matrix4f inverseViewMatrix = viewMatrix.inverse();
+		Eigen::Matrix4f viewProjectionMatrix = projectionMatrix * viewMatrix;
+		Eigen::Matrix4f inverseVPMatrix = viewProjectionMatrix.inverse();
+		Eigen::Vector4f worldSpacePoint4 = inverseVPMatrix * clipSpacePoint;
+		if (worldSpacePoint4.w() != 0.0f) {
+			worldSpacePoint4 /= worldSpacePoint4.w();
+		}
+		Eigen::Vector3f worldSpacePoint = worldSpacePoint4.head<3>();
 
-		///*Eigen::Vector3f viewDirection = -inverseViewMatrix.block<3, 1>(0, 2);
-		//viewDirection.normalize();*/
+		Eigen::Matrix4f inverseViewMatrix = viewMatrix.inverse();
 
-		//Eigen::Vector3f cameraPosition = inverseViewMatrix.block<3, 1>(0, 3);
+		/*Eigen::Vector3f viewDirection = -inverseViewMatrix.block<3, 1>(0, 2);
+		viewDirection.normalize();*/
 
-		//Eigen::Vector3f rayDirection = worldSpacePoint - cameraPosition;
-		//rayDirection.normalize();
+		Eigen::Vector3f cameraPosition = inverseViewMatrix.block<3, 1>(0, 3);
 
-		//VD::Clear("ViewDirection");
+		Eigen::Vector3f rayDirection = worldSpacePoint - cameraPosition;
+		rayDirection.normalize();
+
+		VD::Clear("ViewDirection");
 		//VisualDebugging::AddLine("ViewDirection", cameraPosition, cameraPosition + rayDirection * 1000, Color4::Red);
 
-		//auto octree = (Spatial::Octree*)app->registry["octree"];
+		auto octree = (Spatial::Octree*)app->registry["octree"];
 
-		//Spatial::Ray ray(cameraPosition, rayDirection);
-		//auto result = octree->searchPointsNearRay(ray, 0.2f);
-		//t = Time::End(t, "Picking");
+		Spatial::Ray ray(cameraPosition, rayDirection);
+		auto result = octree->searchPointsNearRay(ray, 0.2f);
+		t = Time::End(t, "Picking");
 
-		//float weight = 50.0f;
+		float weight = 50.0f;
 
-		//if (0 < result.size())
-		//{
-		//	int candidateIndex = result[0];
-		//	float minScore = FLT_MAX;
-		//	for (auto& i : result)
-		//	{
-		//		auto p = octree->points[i];
-		//		float distanceToRay = octree->distanceToRay(ray, p) + 0.001f;
-		//		auto distanceToOrigin = ((p - cameraPosition).norm() + 0.001f) / weight;
-		//		float distanceScore = distanceToRay * distanceToOrigin;
-		//		if (distanceScore < minScore)
-		//		{
-		//			candidateIndex = i;
-		//			minScore = distanceScore;
-		//		}
-		//		VD::AddSphere("NN", p, { 0.15f, 0.15f, 0.15f }, { 0.0f, 0.0f, 1.0f }, Color4::Blue);
-		//	}
+		if (0 < result.size())
+		{
+			int candidateIndex = result[0];
+			float minScore = FLT_MAX;
+			for (auto& i : result)
+			{
+				auto p = octree->points[i];
+				float distanceToRay = octree->distanceToRay(ray, p) * 1000.0f + 0.001f;
+				float distanceToOrigin = ((p - cameraPosition).norm() + 0.001f) * 1000.0f / (weight * weight * weight);
+				float distanceToLastPoint = ((p - lastSelectionPoint).norm() + 0.001f) * 1000.0f / weight;
+				float distanceScore = distanceToRay * distanceToOrigin * distanceToLastPoint;
+				if (distanceScore < minScore)
+				{
+					candidateIndex = i;
+					minScore = distanceScore;
+				}
+				//VD::AddSphere("NN", p, { 0.15f, 0.15f, 0.15f }, { 0.0f, 0.0f, 1.0f }, Color4::Blue);
+			}
 
-		//	{
-		//		auto p = octree->points[candidateIndex];
-		//		VD::AddSphere("NN", p, { 0.2f, 0.2f, 0.2f }, { 0.0f, 0.0f, 1.0f }, Color4::Red);
+			{
+				auto p = octree->points[candidateIndex];
+				//VD::AddSphere("NN", p, { 0.2f, 0.2f, 0.2f }, { 0.0f, 0.0f, 1.0f }, Color4::Red);
 
-		//		auto searchResult = octree->radiusSearch(p, 1.0f);
-		//		for (auto& i : searchResult)
-		//		{
-		//			if (0 == selectedIndices.count(i))
-		//			{
-		//				selectedIndices.insert(i);
-		//				auto rp = octree->points[i];
-		//				VD::AddSphere("NN", rp, { 0.15f, 0.15f, 0.15f }, { 0.0f, 0.0f, 1.0f }, Color4::Green);
-		//			}
-		//		}
-
-		//		camera->SetFocalPoint(p.x(), p.y(), p.z());
-		//		renderWindow->Render();
-		//	}
-		//}
-
-		//auto pi = octree->pickPoint(Spatial::Ray(cameraPosition, rayDirection));
-		//if (pi != -1)
-		//{
-		//	auto p = octree->points[(size_t)pi];
-		//	//VD::AddSphere("NN", p, { 0.15f, 0.15f, 0.15f }, { 0.0f, 0.0f, 1.0f }, Color4::Red);
-
-		//	camera->SetFocalPoint(p.x(), p.y(), p.z());
-		//	renderWindow->Render();
-		//}
-
-		////////////auto kdtree = (Algorithm::KDTree*)app->registry["kdtree"];
-
-		////////////Algorithm::Ray ray = {
-		////////////	{ cameraPosition.x(), cameraPosition.y(), cameraPosition.z() },
-		////////////	{ rayDirection.x(), rayDirection.y(), rayDirection.z() }
-		////////////};
-
-		////////////int k = 30;
-		////////////float maxDistance = 1.0f;
-		////////////std::vector<unsigned int> knn = kdtree->RayKNearestNeighbors(ray, k, maxDistance);
-
-		////////////VD::Clear("KNN");
-		////////////auto points = kdtree->GetPoints();
-		////////////printf("knn.size() : %d\n", knn.size());
-		////////////for (auto& index : knn)
-		////////////{
-		////////////	auto x = points[index * 3];
-		////////////	auto y = points[index * 3 + 1];
-		////////////	auto z = points[index * 3 + 2];
-
-		////////////	//printf("")
-
-		////////////	VD::AddSphere("KNN", { x,y,z }, { 0.5f, 0.5f, 0.5f }, { 0.0f, 0.0f, 1.0f }, Color4::Red);
-		////////////}
-
-		////////////t = Time::End(t, "Picking");
-
-		////////////float distanceMin = FLT_MAX;
-		////////////float minX = FLT_MAX;
-		////////////float minY = FLT_MAX;
-		////////////float minZ = FLT_MAX;
-
-		////////////vector<size_t> indices;
-
-		////////////for (size_t i = 0; i < 1398561; i++)
-		////////////{
-		////////////	auto x = *(points + i * 3);
-		////////////	auto y = *(points + i * 3 + 1);
-		////////////	auto z = *(points + i * 3 + 2);
-
-		////////////	auto distance = sqrt(Algorithm::RayPointDistanceSquared(ray, points + i * 3));
-
-		////////////	if (distance < 0.5f)
-		////////////	{
-		////////////		indices.push_back(i);
-
-		////////////		//printf("x : %f, y : %f, z : %f, distance : %f\n", x, y, z, distance);
-
-		////////////		VD::AddSphere("KNN", { x,y,z }, { 0.1f, 0.1f, 0.1f }, { 0.0f, 0.0f, 1.0f }, Color4::Green);
-		////////////	}
-
-		////////////	if (distance < distanceMin)
-		////////////	{
-		////////////		distanceMin = distance;
-		////////////		minX = x;
-		////////////		minY = y;
-		////////////		minZ = z;
-		////////////	}
-		////////////}
-
-		////////////printf("-=-\n");
-
-		//////////////for (size_t i = 0; i < indices.size(); i++)
-		//////////////{
-		//////////////	auto x = *(points + indices[i] * 3);
-		//////////////	auto y = *(points + indices[i] * 3 + 1);
-		//////////////	auto z = *(points + indices[i] * 3 + 2);
-
-		//////////////	auto dx = minX - x;
-		//////////////	auto dy = minY - y;
-		//////////////	auto dz = minZ - z;
-
-		//////////////	float distance = sqrt(dx * dx + dy * dy + dz * dz);
-
-		//////////////	//printf("x : %f, y : %f, z : %f, distance : %f\n", x, y, z, distance);
-
-		//////////////	if (distance > 0.5f)
-		//////////////	{
-		//////////////		VD::AddSphere("KNN", { x,y,z }, { 0.1f, 0.1f, 0.1f }, { 0.0f, 0.0f, 1.0f }, Color4::Yellow);
-		//////////////	}
-		//////////////}
-
-		////////////VD::AddSphere("KNN", { minX, minY, minZ }, { 0.1f,0.1f,0.1f }, { 0.0f, 0.0f, 1.0f }, Color4::Blue);
-
-		////////////camera->SetFocalPoint(minX, minY, minZ);
-		////////////renderWindow->Render();
+				camera->SetFocalPoint(p.x(), p.y(), p.z());
+				renderWindow->Render();
+			}
+		}
 	}
 }
 
@@ -508,12 +447,10 @@ void OnMouseMove(App* app, int posx, int posy, int lastx, int lasty, bool lButto
 		auto octree = (Spatial::Octree*)app->registry["octree"];
 
 		Spatial::Ray ray(cameraPosition, rayDirection);
-		auto result = octree->searchPointsNearRay(ray, 0.2f);
+		auto result = octree->searchPointsNearRay(ray, 1.0f);
 		t = Time::End(t, "Picking");
 
 		float weight = 2.0f;
-
-		static Eigen::Vector3f lastPoint(FLT_MAX, FLT_MAX, FLT_MAX);
 
 		if (0 < result.size())
 		{
@@ -523,81 +460,31 @@ void OnMouseMove(App* app, int posx, int posy, int lastx, int lasty, bool lButto
 			{
 				auto p = octree->points[i];
 				float distanceToRay = octree->distanceToRay(ray, p) + 0.001f;
-				auto distanceToOrigin = ((p - cameraPosition).norm() + 0.001f) / weight;
-				float distanceToLastPoint = ((p - lastPoint).norm() + 0.001f) / weight;
+				float distanceToOrigin = ((p - cameraPosition).norm() + 0.001f) / weight;
+				float distanceToLastPoint = ((p - lastSelectionPoint).norm() + 0.001f) / weight;
 				float distanceScore = distanceToRay * distanceToOrigin * distanceToLastPoint;
 				if (distanceScore < minScore)
 				{
 					candidateIndex = i;
 					minScore = distanceScore;
 				}
-				VD::AddSphere("NN", p, { 0.15f, 0.15f, 0.15f }, { 0.0f, 0.0f, 1.0f }, Color4::Blue);
+				//VD::AddSphere("NN", p, { 0.15f, 0.15f, 0.15f }, { 0.0f, 0.0f, 1.0f }, Color4::Blue);
 			}
 
 			{
 				auto p = octree->points[candidateIndex];
-				VD::AddSphere("NN", p, { 0.2f, 0.2f, 0.2f }, { 0.0f, 0.0f, 1.0f }, Color4::Red);
+				VD::AddSphere("NN", p, { 0.3f, 0.3f, 0.3f }, { 0.0f, 0.0f, 1.0f }, Color4::Red);
 
 				auto searchResult = octree->radiusSearch(p, 1.0f);
 				for (auto& i : searchResult)
 				{
 					auto rp = octree->points[i];
-					lastPoint = rp;
-					VD::AddSphere("NN", rp, { 0.15f, 0.15f, 0.15f }, { 0.0f, 0.0f, 1.0f }, Color4::Green);
+					lastSelectionPoint = rp;
+					VD::AddSphere("NN", rp, { 0.215f, 0.215f, 0.215f }, { 0.0f, 0.0f, 1.0f }, Color4::Green);
 				}
 			}
 		}
 	}
-
-	//vtkRenderWindowInteractor* interactor = app->GetInteractor();
-	//vtkRenderWindow* renderWindow = interactor->GetRenderWindow();
-	//vtkRenderer* renderer = renderWindow->GetRenderers()->GetFirstRenderer();
-	//vtkCamera* camera = renderer->GetActiveCamera();
-
-	//int* mousePos = interactor->GetEventPosition();
-	//int mouseX = mousePos[0];
-	//int mouseY = mousePos[1];
-
-	//int* size = renderWindow->GetSize();
-	//int screenWidth = size[0];
-	//int screenHeight = size[1];
-
-	//float depth = 0.5f;
-	//depth = 1.0f;
-
-	//printf("mouseX : %d, mouseY : %d\n", mouseX, mouseY);
-
-	//if (lButton)
-	//{
-	//	float ndcX = (2.0f * mouseX) / screenWidth - 1.0f;
-	//	float ndcY = (2.0f * mouseY) / screenHeight - 1.0f;
-
-	//	Eigen::Vector4f clipSpacePoint(ndcX, ndcY, depth, 1.0f);
-
-	//	auto viewMatrix = vtkToEigen(camera->GetViewTransformMatrix());
-	//	auto projectionMatrix = vtkToEigen(camera->GetProjectionTransformMatrix((float)screenWidth / (float)screenHeight, -1, 1));
-
-	//	Eigen::Matrix4f viewProjectionMatrix = projectionMatrix * viewMatrix;
-	//	Eigen::Matrix4f inverseVPMatrix = viewProjectionMatrix.inverse();
-	//	Eigen::Vector4f worldSpacePoint4 = inverseVPMatrix * clipSpacePoint;
-	//	if (worldSpacePoint4.w() != 0.0f) {
-	//		worldSpacePoint4 /= worldSpacePoint4.w();
-	//	}
-	//	Eigen::Vector3f worldSpacePoint = worldSpacePoint4.head<3>();
-
-	//	Eigen::Matrix4f inverseViewMatrix = viewMatrix.inverse();
-
-	//	/*Eigen::Vector3f viewDirection = -inverseViewMatrix.block<3, 1>(0, 2);
-	//	viewDirection.normalize();*/
-
-	//	Eigen::Vector3f cameraPosition = inverseViewMatrix.block<3, 1>(0, 3);
-
-	//	Eigen::Vector3f rayDirection = worldSpacePoint - cameraPosition;
-	//	rayDirection.normalize();
-
-	//	//VisualDebugging::AddLine("ViewDirection", cameraPosition, cameraPosition + rayDirection * 1000, Color4::Red);
-	//	VisualDebugging::AddLine("ViewDirection", cameraPosition, worldSpacePoint, Color4::Red);
-	//}
 }
 
 #ifdef _WINDOWS
