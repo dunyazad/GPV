@@ -2,10 +2,11 @@
 cmake_minimum_required(VERSION 3.5)
 
 # Project name
-project(GPV)
+project(GPV LANGUAGES CXX CUDA)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler=/wd4819")
 
 # Set output directories
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_SOURCE_DIR}/bin/Debug)
@@ -14,19 +15,37 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_SOURCE_DIR}/bin/Release)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/Modules")
 
 # Find the VTK package
+#find_package(OpenVDB CONFIG REQUIRED)
 find_package(VTK REQUIRED)
 include(${VTK_USE_FILE})
+find_package(CUDAToolkit REQUIRED)
 
 #set(CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH};C:\\Program Files (x86)\\hidapi\\lib\\cmake\\hidapi")
+
+enable_language(CUDA)
+
+set(CMAKE_CUDA_ARCHITECTURES 75 86) # Replace with architectures suitable for your GPU(s)
 
 IF (WIN32)
 # message(STATUS "HDIAPI_INCLUDE_DIRS: ${HDIAPI_INCLUDE_DIRS}")
 # message(STATUS "HDIAPI_LIBRARIES: ${HDIAPI_LIBRARIES}")
 
 find_package(HDIAPI REQUIRED)
-include_directories(${HDIAPI_INCLUDE_DIRS})
-link_libraries(${HDIAPI_LIBRARIES})
+include_directories(
+${HDIAPI_INCLUDE_DIRS}
+"C:\\Program Files (x86)\\OpenVDB\\include"
+)
+link_libraries(
+${HDIAPI_LIBRARIES}
+"C:\\Program Files (x86)\\OpenVDB\\lib\\openvdb.lib"
+)
 ENDIF()
+
+set(cuda_source_list
+    src/CUDA/CUDA_Common.cuh
+    src/CUDA/CUDA.cuh
+    src/CUDA/CUDA.cu
+)
 
 set(source_list
     src/stdHeaderFiles.h
@@ -49,6 +68,10 @@ set(source_list
     src/App/Utility.cpp
     src/Algorithm/SVO.h
     src/Algorithm/SVO.cpp
+    src/Algorithm/MiniMath.h
+    src/Algorithm/MiniMath.cpp
+    src/Algorithm/HVETM.h
+    src/Algorithm/HVETM.cpp
     src/Algorithm/KDtree.h
     src/Algorithm/KDTree.cpp
     src/Algorithm/Octree.hpp
@@ -68,25 +91,51 @@ set(source_list
     src/main.cpp
 )
 
-add_executable(GPV ${source_list})
+set_source_files_properties(${cuda_source_list} PROPERTIES LANGUAGE CUDA)
+
+add_library(cuda_objects OBJECT ${cuda_source_list})
+
+add_executable(GPV
+ ${source_list}
+$<TARGET_OBJECTS:cuda_objects>  # Link CUDA object files here
+)
 
 target_include_directories(GPV PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     "External"
     "External/eigen"
+    "External/nanovdb"
     ${VTK_INCLUDE_DIRS}
+    ${CUDAToolkit_INCLUDE_DIRS}
+)
+
+target_include_directories(cuda_objects PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    "External"
+    "External/eigen"
+    "External/nanovdb"
+    ${VTK_INCLUDE_DIRS}
+    ${CUDAToolkit_INCLUDE_DIRS}
 )
 
 target_link_libraries(GPV
     ${VTK_LIBRARIES}
     ${HDIAPI_LIBRARIES}
+    CUDA::cudart CUDA::cuda_driver
 )
 
 if(MSVC)
     set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT GPV)
     target_compile_options(GPV PRIVATE /bigobj)
 endif()
+
+set_target_properties(GPV PROPERTIES
+    CUDA_SEPARABLE_COMPILATION ON  # Change to ON if needed
+    CMAKE_CUDA_ARCHITECTURES "60;70;80"
+    CUDA_STANDARD 11  # Adjust based on your CUDA version
+)
 
 # vtk_module_autoinit(
 #     TARGETS GPV
@@ -107,4 +156,5 @@ function(assign_source_group)
     endforeach()
 endfunction(assign_source_group)
 
+assign_source_group(${cuda_source_list})
 assign_source_group(${source_list})
