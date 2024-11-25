@@ -658,6 +658,12 @@ void AppStartCallback_Integrate(App* pApp)
 	Eigen::Vector3f* inputPoints = nullptr;
 	cudaMallocManaged(&inputPoints, sizeof(Eigen::Vector3f) * 256 * 480);
 
+	Eigen::Vector3f* inputNormals = nullptr;
+	cudaMallocManaged(&inputNormals, sizeof(Eigen::Vector3f) * 256 * 480);
+
+	Eigen::Vector3f* inputColors = nullptr;
+	cudaMallocManaged(&inputColors, sizeof(Eigen::Vector3f) * 256 * 480);
+
 	size_t numberOfInputPoints = 0;
 
 	/*
@@ -747,9 +753,11 @@ void AppStartCallback_Integrate(App* pApp)
 		vector<Eigen::Vector3f> loadedPoints;
 		int loadedCount = 0;
 
+		CUDA::ClearVolume(volume, make_int3(volumeDimensionX, volumeDimensionY, volumeDimensionZ));
+
 		//size_t i = 3;
-		//for (size_t i = 0; i < 1000; i++)
-		for (size_t i = 0; i < 4252; i++)
+		for (size_t i = 0; i < 100; i++)
+		//for (size_t i = 0; i < 4252; i++)
 		{
 			cudaMemset(inputPoints, 0.0f, sizeof(Eigen::Vector3f) * 256 * 480);
 			numberOfInputPoints = 0;
@@ -765,17 +773,32 @@ void AppStartCallback_Integrate(App* pApp)
 
 			vtkPolyData* polyData = reader->GetOutput();
 
-			auto points = polyData->GetPoints();
-			for (size_t pi = 0; pi < points->GetNumberOfPoints(); pi++)
+
+			auto plyPoints = polyData->GetPoints();
+			float* rawPoints = static_cast<float*>(plyPoints->GetData()->GetVoidPointer(0));
+			vtkDataArray* plyNormals = polyData->GetPointData()->GetNormals();
+			float* rawNormals = static_cast<float*>(plyNormals->GetVoidPointer(0));
+			vtkUnsignedCharArray* plyColors = vtkUnsignedCharArray::SafeDownCast(polyData->GetPointData()->GetScalars());
+
+			for (size_t pi = 0; pi < plyPoints->GetNumberOfPoints(); pi++)
 			{
-				auto dp = points->GetPoint(pi);
+				auto dp = plyPoints->GetPoint(pi);
+				auto normal = plyNormals->GetTuple(pi);
+				unsigned char color[3];
+				plyColors->GetTypedTuple(pi, color);
 				//Eigen::Vector4f tp = cameraTransforms[i] * Eigen::Vector4f(dp[0], dp[1], dp[2] + 20.0f, 1.0f);
 				//Eigen::Vector3f p(tp.x(), tp.y(), tp.z());
 
 				Eigen::Vector3f p(dp[0], dp[1], dp[2]);
 				p += modelTranslation;
-
 				inputPoints[pi] = p;
+
+				Eigen::Vector3f n(normal[0], normal[1], normal[2]);
+				inputNormals[pi] = n;
+
+				Eigen::Vector3f c((float)color[0] / 255.0f, (float)color[1] / 255.0f, (float)color[2] / 255.0f);
+				inputColors[pi] = c;
+
 				numberOfInputPoints++;
 			}
 
@@ -783,28 +806,42 @@ void AppStartCallback_Integrate(App* pApp)
 				volume,
 				make_int3(volumeDimensionX, volumeDimensionY, volumeDimensionZ),
 				0.1f,
+				numberOfInputPoints,
 				inputPoints,
-				numberOfInputPoints);
+				inputNormals,
+				inputColors);
 
 			Time::End(te, "Loading PointCloud Patch", i);
 		}
 
+		auto numberOfSurfaceVoxels = CUDA::GetNumberOfSurfaceVoxels(volume,
+			make_int3(volumeDimensionX, volumeDimensionY, volumeDimensionZ),
+			0.1f);
+
+		printf("Number of surface voxeles : %llu\n", numberOfSurfaceVoxels);
+
+		return;
+
 		t = Time::Now();
 		for (size_t i = 0; i < volumeDimensionX * volumeDimensionY * volumeDimensionZ; i++)
 		{
-			if (volume[i].tsdfValue != 1.0f) continue;
+			if (-0.05f < volume[i].tsdfValue && volume[i].tsdfValue < 0.05f)
+			{
+				int zKey = i / (volumeDimensionX * volumeDimensionY);
+				int yKey = (i % (volumeDimensionX * volumeDimensionY)) / volumeDimensionX;
+				int xKey = (i % (volumeDimensionX * volumeDimensionY)) % volumeDimensionX;
 
-			int zKey = i / (volumeDimensionX * volumeDimensionY);
-			int yKey = (i % (volumeDimensionX * volumeDimensionY)) / volumeDimensionX;
-			int xKey = (i % (volumeDimensionX * volumeDimensionY)) % volumeDimensionX;
+				float x = xKey * voxelSize - modelTranslation.x();
+				float y = yKey * voxelSize - modelTranslation.y();
+				float z = zKey * voxelSize - modelTranslation.z();
 
-			float x = xKey * voxelSize - modelTranslation.x();
-			float y = yKey * voxelSize - modelTranslation.y();
-			float z = zKey * voxelSize - modelTranslation.z();
+				//printf("%f, %f, %f\n", x, y, z);
 
-			//printf("%f, %f, %f\n", x, y, z);
+				Color4 color(255, 255, 255, 255);
+				color.FromNormalzed(volume[i].color.x(), volume[i].color.y(), volume[i].color.z(), 1.0f);
 
-			VD::AddCube("temp", { x, y, z }, 0.1f, Color4::Red);
+				VD::AddCube("temp", { x, y, z }, 0.1f, color);
+			}
 		}
 		Time::End(t, "Show Voxels");
 
