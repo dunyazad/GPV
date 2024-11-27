@@ -488,9 +488,7 @@ namespace CUDA
 		//}
 	}
 
-	__global__ void Kernel_ClearVolume(
-		Voxel* volume,
-		int3 volumeDimension)
+	__global__ void Kernel_ClearVolume(Voxel* volume, uint3 volumeDimension)
 	{
 		uint32_t threadid = blockDim.x * blockIdx.x + threadIdx.x;
 		if (threadid > volumeDimension.x * volumeDimension.y * volumeDimension.z - 1) return;
@@ -500,7 +498,7 @@ namespace CUDA
 		volume[threadid].color = Eigen::Vector3f(1.0f, 1.0f, 1.0f);
 	}
 
-	void ClearVolume(Voxel* volume, int3 volumeDimension)
+	void ClearVolume(Voxel* volume, uint3 volumeDimension)
 	{
 		nvtxRangePushA("ClearVolume");
 
@@ -519,7 +517,7 @@ namespace CUDA
 
 	__global__ void Kernel_IntegrateInputPoints(
 		Voxel* volume,
-		int3 volumeDimension,
+		uint3 volumeDimension,
 		float voxelSize,
 		size_t numberOfInputPoints,
 		Eigen::Vector3f* inputPoints,
@@ -603,7 +601,7 @@ namespace CUDA
 	}
 
 	void IntegrateInputPoints(
-		Voxel* volume, int3 volumeDimension, float voxelSize,
+		Voxel* volume, uint3 volumeDimension, float voxelSize,
 		size_t numberOfInputPoints, Eigen::Vector3f* inputPoints, Eigen::Vector3f* inputNormals, Eigen::Vector3f* inputColors)
 	{
 		nvtxRangePushA("IntegrateInputPoints");
@@ -622,7 +620,7 @@ namespace CUDA
 		nvtxRangePop();
 	}
 
-	__global__ void Kernel_GetNumberOfSurfaceVoxels(Voxel* volume, int3 volumeDimension, float voxelSize, size_t* numberOfSurfaceVoxel)
+	__global__ void Kernel_GetNumberOfSurfaceVoxels(Voxel* volume, uint3 volumeDimension, float voxelSize, size_t* numberOfSurfaceVoxel)
 	{
 		uint32_t threadid = blockDim.x * blockIdx.x + threadIdx.x;
 		if (threadid > volumeDimension.x * volumeDimension.y * volumeDimension.z - 1) return;
@@ -633,7 +631,7 @@ namespace CUDA
 		}
 	}
 
-	size_t GetNumberOfSurfaceVoxels(Voxel* volume, int3 volumeDimension, float voxelSize)
+	size_t GetNumberOfSurfaceVoxels(Voxel* volume, uint3 volumeDimension, float voxelSize)
 	{
 		nvtxRangePushA("GetNumberOfSurfaceVoxel");
 
@@ -658,51 +656,247 @@ namespace CUDA
 		return result;
 	}
 
+	__global__ void Kernel_ExtractSurfacePoints(
+		Voxel* volume, uint3 volumeDimension, float voxelSize, Eigen::Vector3f volumeMin, Point* resultPoints, size_t* numberOfResultPoints)
+	{
+		uint32_t threadid = blockDim.x * blockIdx.x + threadIdx.x;
+		if (threadid > volumeDimension.x * volumeDimension.y * volumeDimension.z - 1) return;
+
+		auto zIndex = threadid / (volumeDimension.x * volumeDimension.y);
+		auto yIndex = (threadid % (volumeDimension.x * volumeDimension.y)) / volumeDimension.x;
+		auto xIndex = (threadid % (volumeDimension.x * volumeDimension.y)) % volumeDimension.x;
+
+		if (-voxelSize * 0.025f < volume[threadid].tsdfValue && volume[threadid].tsdfValue < voxelSize * 0.025f)
+		{
+			float x = volumeMin.x() + (float)xIndex * voxelSize;
+			float y = volumeMin.y() + (float)yIndex * voxelSize;
+			float z = volumeMin.z() + (float)zIndex * voxelSize;
+
+			auto index = atomicAdd(numberOfResultPoints, 1);
+			resultPoints[index].position = Eigen::Vector3f(x, y, z);
+			resultPoints[index].normal = volume[threadid].normal;
+			resultPoints[index].color = volume[threadid].color;
+		}
+	}
+
+	//__global__ void Kernel_ExtractSurfacePoints(
+	//	Voxel* volume, uint3 volumeDimension, float voxelSize, Eigen::Vector3f volumeMin, Point* resultPoints, size_t* numberOfResultPoints)
+	//{
+	//	uint32_t threadid = blockDim.x * blockIdx.x + threadIdx.x;
+	//	if (threadid > volumeDimension.x * volumeDimension.y * volumeDimension.z - 1) return;
+
+	//	auto zIndex = threadid / (volumeDimension.x * volumeDimension.y);
+	//	auto yIndex = (threadid % (volumeDimension.x * volumeDimension.y)) / volumeDimension.x;
+	//	auto xIndex = (threadid % (volumeDimension.x * volumeDimension.y)) % volumeDimension.x;
+	//	auto& voxel = volume[threadid];
+	//	if (FLT_MAX == voxel.tsdfValue) return;
+
+	//	auto position = volumeMin + Eigen::Vector3f((float)xIndex * voxelSize, (float)yIndex * voxelSize, (float)zIndex * voxelSize);
+
+	//	Eigen::Vector3f mp(FLT_MAX, FLT_MAX, FLT_MAX);
+	//	int mc = 0;
+
+	//	int offset = 1;
+	//	for (int z = zIndex - offset; z <= zIndex + offset; z++)
+	//	{
+	//		if (z < 0 || z > volumeDimension.z - 1) continue;
+	//		for (int y = yIndex - offset; y <= yIndex + offset; y++)
+	//		{
+	//			if (y < 0 || y > volumeDimension.y - 1) continue;
+	//			for (int x = xIndex - offset; x <= xIndex + offset; x++)
+	//			{
+	//				if (x < 0 || x > volumeDimension.x - 1) continue;
+
+	//				if (x == xIndex && y == yIndex && z == zIndex) continue;
+
+	//				auto neighborVoxelIndex = z * volumeDimension.x * volumeDimension.y + y * volumeDimension.x + x;
+	//				auto& neighborVoxel = volume[neighborVoxelIndex];
+
+	//				if (FLT_MAX == neighborVoxel.tsdfValue) continue;
+
+	//				if (0 > voxel.tsdfValue * neighborVoxel.tsdfValue)
+	//				{
+	//					auto neighborPosition = volumeMin + Eigen::Vector3f((float)x * voxelSize, (float)y * voxelSize, (float)z * voxelSize);
+
+	//					if (0.0f == neighborVoxel.tsdfValue - voxel.tsdfValue)
+	//					{
+
+	//					}
+	//					else
+	//					{
+	//						float ratio = voxel.tsdfValue / (neighborVoxel.tsdfValue - voxel.tsdfValue);
+	//						Eigen::Vector3f ip = position * ratio + neighborPosition * (1 - ratio);
+
+	//						if (0 == mc)
+	//						{
+	//							mp = ip;
+	//							mc = 1;
+	//						}
+	//						else
+	//						{
+	//							mp += ip;
+	//							mc++;
+	//						}
+	//					}
+	//				}
+	//			}
+	//		}
+	//	}
+
+	//	if (0 < mc)
+	//	{
+	//		auto index = atomicAdd(numberOfResultPoints, 1);
+	//		resultPoints[index].position = mp / (float)mc;
+	//		//printf("index : %llu\n", index);
+	//		//resultPoints[index].position = position;
+	//		resultPoints[index].normal = volume[threadid].normal;
+	//		resultPoints[index].color = volume[threadid].color;
+	//	}
+	//}
+
+	void ExtractSurfacePoints(
+		Voxel* volume, uint3 volumeDimension, float voxelSize, Eigen::Vector3f volumeMin, Point* resultPoints, size_t* numberOfResultPoints)
+	{
+		nvtxRangePushA("ExtractSurfacePoints");
+
+		int mingridsize;
+		int threadblocksize;
+		checkCudaErrors(cudaOccupancyMaxPotentialBlockSize(&mingridsize, &threadblocksize, Kernel_ExtractSurfacePoints, 0, 0));
+		auto gridsize = (volumeDimension.x * volumeDimension.y * volumeDimension.z - 1) / threadblocksize;
+
+		Kernel_ExtractSurfacePoints << <gridsize, threadblocksize >> > (
+			volume, volumeDimension, voxelSize, volumeMin, resultPoints, numberOfResultPoints);
+
+		checkCudaErrors(cudaDeviceSynchronize());
+
+		nvtxRangePop();
+	}
 
 #if 0
-	struct ExtractionEdge
+	__global__ void Kernel_PopulateExtractionVoxels(
+		Voxel* volume, uint3 volumeDimension, float voxelSiz,
+		Eigen::Vector3f& volumeMin,
+		ExtractionVoxel* extractionVoxels, unsigned int* numberOfExtractionVoxels, ExtractionEdge* extractionEdges, unsigned int* numberOfExtractionEdges)
 	{
-		uint32_t startVoxelIndex = UINT32_MAX;
-		uint32_t endVoxelIndex = UINT32_MAX;
-		byte edgeDirection = 0;
-		bool zeroCrossing = false;
-		//Eigen::Vector3f zeroCrossingPoint = Eigen::Vector3f(FLT_MAX, FLT_MAX, FLT_MAX);
-		uint32_t zeroCrossingPointIndex = UINT32_MAX;
-		int neighborCount = 0;
-	};
+		unsigned int threadid = blockIdx.x * blockDim.x + threadIdx.x;
+		if (threadid > volumeDimension.x * volumeDimension.y * volumeDimension.z - 1) return;
 
-	struct ExtractionTriangle
-	{
-		uint32_t edgeIndices[3] = { UINT32_MAX, UINT32_MAX, UINT32_MAX };
-		uint32_t vertexIndices[3] = { UINT32_MAX, UINT32_MAX, UINT32_MAX };
-	};
+		if (FLT_MAX == volume[threadid].tsdfValue) return;
+		
+		extractionVoxels[threadid].value = volume[threadid].tsdfValue;
 
-	struct ExtractionVoxel
-	{
-		uint32_t globalIndexX = UINT32_MAX;
-		uint32_t globalIndexY = UINT32_MAX;
-		uint32_t globalIndexZ = UINT32_MAX;
+		auto globalIndexX = (key >> 32) & 0xffff;
+		auto globalIndexY = (key >> 16) & 0xffff;
+		auto globalIndexZ = (key) & 0xffff;
 
-		Eigen::Vector3f position = Eigen::Vector3f(FLT_MAX, FLT_MAX, FLT_MAX);
-		float value = FLT_MAX;
+		extractionVoxels[i].globalIndexX = globalIndexX;
+		extractionVoxels[i].globalIndexY = globalIndexY;
+		extractionVoxels[i].globalIndexZ = globalIndexZ;
 
-		uint32_t edgeIndexX = UINT32_MAX;
-		uint32_t edgeIndexY = UINT32_MAX;
-		uint32_t edgeIndexZ = UINT32_MAX;
+		auto x = (float)globalIndexX * exeInfo.global.voxelSize
+			+ exeInfo.global.voxelSize * 0.5f
+			- exeInfo.global.voxelSize * (float)exeInfo.global.voxelCountX * 0.5f;
+		auto y = (float)globalIndexY * exeInfo.global.voxelSize
+			+ exeInfo.global.voxelSize * 0.5f
+			- exeInfo.global.voxelSize * (float)exeInfo.global.voxelCountY * 0.5f;
+		auto z = (float)globalIndexZ * exeInfo.global.voxelSize
+			+ exeInfo.global.voxelSize * 0.5f
+			- exeInfo.global.voxelSize * (float)exeInfo.global.voxelCountZ * 0.5f;
 
-		ExtractionTriangle triangles[4] = { ExtractionTriangle(), ExtractionTriangle(), ExtractionTriangle(), ExtractionTriangle() };
-		uint32_t numberOfTriangles = 0;
-	};
+		extractionVoxels[i].position = Eigen::Vector3f(x, y, z);
+
+		extractionVoxels[i].edgeIndexX = i * 3;
+		extractionVoxels[i].edgeIndexY = i * 3 + 1;
+		extractionVoxels[i].edgeIndexZ = i * 3 + 2;
+
+		extractionVoxels[i].numberOfTriangles = 0;
+
+		extractionVoxels[i].triangles[0].edgeIndices[0] = UINT32_MAX;
+		extractionVoxels[i].triangles[0].edgeIndices[1] = UINT32_MAX;
+		extractionVoxels[i].triangles[0].edgeIndices[2] = UINT32_MAX;
+
+		extractionVoxels[i].triangles[1].edgeIndices[0] = UINT32_MAX;
+		extractionVoxels[i].triangles[1].edgeIndices[1] = UINT32_MAX;
+		extractionVoxels[i].triangles[1].edgeIndices[2] = UINT32_MAX;
+
+		extractionVoxels[i].triangles[2].edgeIndices[0] = UINT32_MAX;
+		extractionVoxels[i].triangles[2].edgeIndices[1] = UINT32_MAX;
+		extractionVoxels[i].triangles[2].edgeIndices[2] = UINT32_MAX;
+
+		extractionVoxels[i].triangles[3].edgeIndices[0] = UINT32_MAX;
+		extractionVoxels[i].triangles[3].edgeIndices[1] = UINT32_MAX;
+		extractionVoxels[i].triangles[3].edgeIndices[2] = UINT32_MAX;
+
+		extractionEdges[i * 3 + 0].startVoxelIndex = i;
+		extractionEdges[i * 3 + 0].edgeDirection = 0;
+		extractionEdges[i * 3 + 0].zeroCrossing = false;
+		extractionEdges[i * 3 + 0].zeroCrossingPointIndex = UINT32_MAX;
+		extractionEdges[i * 3 + 1].startVoxelIndex = i;
+		extractionEdges[i * 3 + 1].edgeDirection = 1;
+		extractionEdges[i * 3 + 1].zeroCrossing = false;
+		extractionEdges[i * 3 + 1].zeroCrossingPointIndex = UINT32_MAX;
+		extractionEdges[i * 3 + 2].startVoxelIndex = i;
+		extractionEdges[i * 3 + 2].edgeDirection = 2;
+		extractionEdges[i * 3 + 2].zeroCrossing = false;
+		extractionEdges[i * 3 + 2].zeroCrossingPointIndex = UINT32_MAX;
+
+		// Next X
+		{
+			auto voxel_key = HASH_KEY_GEN_CUBE_64_(globalIndexX + 1, globalIndexY, globalIndexZ);
+			uint32_t hashSlot_idx = get_hashtable_lookup_idx_func64_v4(globalHash_info, globalHash, globalHash_value, voxel_key);
+			if (hashSlot_idx != kEmpty32)
+			{
+				extractionEdges[i * 3 + 0].endVoxelIndex = hashSlot_idx;
+			}
+			else
+			{
+				extractionEdges[i * 3 + 0].endVoxelIndex = UINT32_MAX;
+			}
+		}
+
+		// Next Y
+		{
+			auto voxel_key = HASH_KEY_GEN_CUBE_64_(globalIndexX, globalIndexY + 1, globalIndexZ);
+			uint32_t hashSlot_idx = get_hashtable_lookup_idx_func64_v4(globalHash_info, globalHash, globalHash_value, voxel_key);
+			if (hashSlot_idx != kEmpty32)
+			{
+				extractionEdges[i * 3 + 1].endVoxelIndex = hashSlot_idx;
+			}
+			else
+			{
+				extractionEdges[i * 3 + 1].endVoxelIndex = UINT32_MAX;
+			}
+		}
+
+		// Next Z
+		{
+			auto voxel_key = HASH_KEY_GEN_CUBE_64_(globalIndexX, globalIndexY, globalIndexZ + 1);
+			uint32_t hashSlot_idx = get_hashtable_lookup_idx_func64_v4(globalHash_info, globalHash, globalHash_value, voxel_key);
+			if (hashSlot_idx != kEmpty32)
+			{
+				extractionEdges[i * 3 + 2].endVoxelIndex = hashSlot_idx;
+			}
+			else
+			{
+				extractionEdges[i * 3 + 2].endVoxelIndex = UINT32_MAX;
+			}
+		}
+	}
 
 	__global__ void Kernel_ExtractVolume(
-		MarchingCubes::ExecutionInfo exeInfo,
-		HashKey64* globalHash_info, uint64_t* globalHash, uint8_t* globalHash_value,
-		voxel_value_t* voxelValues, unsigned short* voxelValueCounts, Eigen::Vector3f* voxelNormals, Eigen::Vector<unsigned char, 3>* voxelColors,
+		Voxel* volume, uint3 volumeDimension, float voxelSiz,
 		Eigen::Vector3f* resultPositions, Eigen::Vector3f* resultNormals, Eigen::Vector4f* resultColors,
 		unsigned int* numberOfVoxelPositions, ExtractionVoxel* extractionVoxels, ExtractionEdge* extractionEdges)
 	{
 		unsigned int threadid = blockIdx.x * blockDim.x + threadIdx.x;
-		if (threadid > globalHash_info->HashTableCapacity - 1) return;
+		if (threadid > volumeDimension.x * volumeDimension.y * volumeDimension.z - 1) return;
+
+		auto& voxel = volume[threadid];
+		if (FLT_MAX == voxel.tsdfValue) return;
+
+		int zIndex = threadid / (volumeDimension.x * volumeDimension.y);
+		int yIndex = (threadid % (volumeDimension.x * volumeDimension.y)) / volumeDimension.x;
+		int xIndex = (threadid % (volumeDimension.x * volumeDimension.y)) % volumeDimension.x;
 
 		auto key = globalHash[threadid];
 		if ((kEmpty64 != key) && (kEmpty8 != globalHash_value[threadid]))
@@ -894,123 +1088,6 @@ namespace CUDA
 					ntriang++;
 				}
 
-			}
-		}
-	}
-
-	__global__ void Kernel_PopulateExtractionVoxels(
-		MarchingCubes::ExecutionInfo exeInfo,
-		HashKey64* globalHash_info, uint64_t* globalHash, uint8_t* globalHash_value,
-		voxel_value_t* voxelValues, unsigned short* voxelValueCounts, Eigen::Vector3f* voxelNormals, Eigen::Vector<unsigned char, 3>* voxelColors,
-		//Eigen::Vector3f* resultPositions, Eigen::Vector3f* resultNormals, Eigen::Vector4f* resultColors, unsigned int* numberOfVoxelPositions,
-		ExtractionVoxel* extractionVoxels, unsigned int* numberOfExtractionVoxels, ExtractionEdge* extractionEdges, unsigned int* numberOfExtractionEdges)
-	{
-		unsigned int threadid = blockIdx.x * blockDim.x + threadIdx.x;
-		if (threadid > exeInfo.globalHashInfo->HashTableCapacity - 1) return;
-
-		auto key = exeInfo.globalHash[threadid];
-		auto i = get_hashtable_lookup_idx_func64_v4(exeInfo.globalHashInfo, exeInfo.globalHash, exeInfo.globalHashValue, key);
-		if (i == kEmpty32) return;
-
-		auto vv = voxelValues[i];
-		if (VOXEL_INVALID == vv) return;
-
-		extractionVoxels[i].value = VV2D(vv);
-
-		auto globalIndexX = (key >> 32) & 0xffff;
-		auto globalIndexY = (key >> 16) & 0xffff;
-		auto globalIndexZ = (key) & 0xffff;
-
-		extractionVoxels[i].globalIndexX = globalIndexX;
-		extractionVoxels[i].globalIndexY = globalIndexY;
-		extractionVoxels[i].globalIndexZ = globalIndexZ;
-
-		auto x = (float)globalIndexX * exeInfo.global.voxelSize
-			+ exeInfo.global.voxelSize * 0.5f
-			- exeInfo.global.voxelSize * (float)exeInfo.global.voxelCountX * 0.5f;
-		auto y = (float)globalIndexY * exeInfo.global.voxelSize
-			+ exeInfo.global.voxelSize * 0.5f
-			- exeInfo.global.voxelSize * (float)exeInfo.global.voxelCountY * 0.5f;
-		auto z = (float)globalIndexZ * exeInfo.global.voxelSize
-			+ exeInfo.global.voxelSize * 0.5f
-			- exeInfo.global.voxelSize * (float)exeInfo.global.voxelCountZ * 0.5f;
-
-		extractionVoxels[i].position = Eigen::Vector3f(x, y, z);
-
-		extractionVoxels[i].edgeIndexX = i * 3;
-		extractionVoxels[i].edgeIndexY = i * 3 + 1;
-		extractionVoxels[i].edgeIndexZ = i * 3 + 2;
-
-		extractionVoxels[i].numberOfTriangles = 0;
-
-		extractionVoxels[i].triangles[0].edgeIndices[0] = UINT32_MAX;
-		extractionVoxels[i].triangles[0].edgeIndices[1] = UINT32_MAX;
-		extractionVoxels[i].triangles[0].edgeIndices[2] = UINT32_MAX;
-
-		extractionVoxels[i].triangles[1].edgeIndices[0] = UINT32_MAX;
-		extractionVoxels[i].triangles[1].edgeIndices[1] = UINT32_MAX;
-		extractionVoxels[i].triangles[1].edgeIndices[2] = UINT32_MAX;
-
-		extractionVoxels[i].triangles[2].edgeIndices[0] = UINT32_MAX;
-		extractionVoxels[i].triangles[2].edgeIndices[1] = UINT32_MAX;
-		extractionVoxels[i].triangles[2].edgeIndices[2] = UINT32_MAX;
-
-		extractionVoxels[i].triangles[3].edgeIndices[0] = UINT32_MAX;
-		extractionVoxels[i].triangles[3].edgeIndices[1] = UINT32_MAX;
-		extractionVoxels[i].triangles[3].edgeIndices[2] = UINT32_MAX;
-
-		extractionEdges[i * 3 + 0].startVoxelIndex = i;
-		extractionEdges[i * 3 + 0].edgeDirection = 0;
-		extractionEdges[i * 3 + 0].zeroCrossing = false;
-		extractionEdges[i * 3 + 0].zeroCrossingPointIndex = UINT32_MAX;
-		extractionEdges[i * 3 + 1].startVoxelIndex = i;
-		extractionEdges[i * 3 + 1].edgeDirection = 1;
-		extractionEdges[i * 3 + 1].zeroCrossing = false;
-		extractionEdges[i * 3 + 1].zeroCrossingPointIndex = UINT32_MAX;
-		extractionEdges[i * 3 + 2].startVoxelIndex = i;
-		extractionEdges[i * 3 + 2].edgeDirection = 2;
-		extractionEdges[i * 3 + 2].zeroCrossing = false;
-		extractionEdges[i * 3 + 2].zeroCrossingPointIndex = UINT32_MAX;
-
-		// Next X
-		{
-			auto voxel_key = HASH_KEY_GEN_CUBE_64_(globalIndexX + 1, globalIndexY, globalIndexZ);
-			uint32_t hashSlot_idx = get_hashtable_lookup_idx_func64_v4(globalHash_info, globalHash, globalHash_value, voxel_key);
-			if (hashSlot_idx != kEmpty32)
-			{
-				extractionEdges[i * 3 + 0].endVoxelIndex = hashSlot_idx;
-			}
-			else
-			{
-				extractionEdges[i * 3 + 0].endVoxelIndex = UINT32_MAX;
-			}
-		}
-
-		// Next Y
-		{
-			auto voxel_key = HASH_KEY_GEN_CUBE_64_(globalIndexX, globalIndexY + 1, globalIndexZ);
-			uint32_t hashSlot_idx = get_hashtable_lookup_idx_func64_v4(globalHash_info, globalHash, globalHash_value, voxel_key);
-			if (hashSlot_idx != kEmpty32)
-			{
-				extractionEdges[i * 3 + 1].endVoxelIndex = hashSlot_idx;
-			}
-			else
-			{
-				extractionEdges[i * 3 + 1].endVoxelIndex = UINT32_MAX;
-			}
-		}
-
-		// Next Z
-		{
-			auto voxel_key = HASH_KEY_GEN_CUBE_64_(globalIndexX, globalIndexY, globalIndexZ + 1);
-			uint32_t hashSlot_idx = get_hashtable_lookup_idx_func64_v4(globalHash_info, globalHash, globalHash_value, voxel_key);
-			if (hashSlot_idx != kEmpty32)
-			{
-				extractionEdges[i * 3 + 2].endVoxelIndex = hashSlot_idx;
-			}
-			else
-			{
-				extractionEdges[i * 3 + 2].endVoxelIndex = UINT32_MAX;
 			}
 		}
 	}

@@ -45,6 +45,8 @@ set(cuda_source_list
     src/CUDA/CUDA_Common.cuh
     src/CUDA/CUDA.cuh
     src/CUDA/CUDA.cu
+    src/CUDA/Octree.cuh
+    src/CUDA/Octree.cu
 )
 
 set(source_list
@@ -62,6 +64,7 @@ set(source_list
     src/App/AppEventHandlers.cpp
     src/App/CustomTrackballStyle.h
     src/App/CustomTrackballStyle.cpp
+    src/App/Serialization.hpp
     src/App/USBHandler.h
     src/App/USBHandler.cpp
     src/App/Utility.h
@@ -105,6 +108,7 @@ target_include_directories(GPV PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     "External"
     "External/eigen"
+    "External/nanoflann"
     "External/nanovdb"
     ${VTK_INCLUDE_DIRS}
     ${CUDAToolkit_INCLUDE_DIRS}
@@ -115,6 +119,7 @@ target_include_directories(cuda_objects PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     "External"
     "External/eigen"
+    "External/nanoflann"
     "External/nanovdb"
     ${VTK_INCLUDE_DIRS}
     ${CUDAToolkit_INCLUDE_DIRS}

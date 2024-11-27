@@ -1,6 +1,7 @@
 #include <Common.h>
 #include <App/App.h>
 #include <App/AppEventHandlers.h>
+#include <App/Serialization.hpp>
 #include <App/USBHandler.h>
 
 #include <Algorithm/KDTree.h>
@@ -15,6 +16,7 @@
 using VD = VisualDebugging;
 
 #include <CUDA/CUDA.cuh>
+#include <CUDA/Octree.cuh>
 
 int pid = 0;
 size_t size_0 = 0;
@@ -644,12 +646,14 @@ void AppStartCallback_Integrate(App* pApp)
 	int volumeDimensionY = 1000;
 	int volumeDimensionZ = 500;
 
-	LoadModel(renderer, "C:\\Resources\\3D\\PLY\\Complete\\Lower.ply");
+	//LoadModel(renderer, "C:\\Resources\\3D\\PLY\\Complete\\Lower.ply");
 
 	//SaveTRNFile();
 	LoadTRNFile();
 
 	Eigen::Vector3f modelTranslation(20.0f, 75.0f, 25.0f);
+
+	uint3 volumeDimension = make_uint3(volumeDimensionX, volumeDimensionY, volumeDimensionZ);
 
 	CUDA::Voxel* volume;
 	cudaMallocManaged(&volume, sizeof(CUDA::Voxel) * volumeDimensionX * volumeDimensionY * volumeDimensionZ);
@@ -753,10 +757,10 @@ void AppStartCallback_Integrate(App* pApp)
 		vector<Eigen::Vector3f> loadedPoints;
 		int loadedCount = 0;
 
-		CUDA::ClearVolume(volume, make_int3(volumeDimensionX, volumeDimensionY, volumeDimensionZ));
+		CUDA::ClearVolume(volume, volumeDimension);
 
 		//size_t i = 3;
-		for (size_t i = 0; i < 100; i++)
+		for (size_t i = 0; i < 10; i++)
 		//for (size_t i = 0; i < 4252; i++)
 		{
 			cudaMemset(inputPoints, 0.0f, sizeof(Eigen::Vector3f) * 256 * 480);
@@ -793,6 +797,8 @@ void AppStartCallback_Integrate(App* pApp)
 				p += modelTranslation;
 				inputPoints[pi] = p;
 
+				aabb.extend(p);
+
 				Eigen::Vector3f n(normal[0], normal[1], normal[2]);
 				inputNormals[pi] = n;
 
@@ -804,7 +810,7 @@ void AppStartCallback_Integrate(App* pApp)
 
 			CUDA::IntegrateInputPoints(
 				volume,
-				make_int3(volumeDimensionX, volumeDimensionY, volumeDimensionZ),
+				volumeDimension,
 				0.1f,
 				numberOfInputPoints,
 				inputPoints,
@@ -814,11 +820,51 @@ void AppStartCallback_Integrate(App* pApp)
 			Time::End(te, "Loading PointCloud Patch", i);
 		}
 
-		auto numberOfSurfaceVoxels = CUDA::GetNumberOfSurfaceVoxels(volume,
-			make_int3(volumeDimensionX, volumeDimensionY, volumeDimensionZ),
-			0.1f);
+		auto numberOfSurfaceVoxels = CUDA::GetNumberOfSurfaceVoxels(volume, volumeDimension, 0.1f);
+
+		CUDA::Point* resultPoints;
+		cudaMallocManaged(&resultPoints, sizeof(CUDA::Point) * numberOfSurfaceVoxels * 5);
+
+		size_t* numberOfResultPoints;
+		cudaMallocManaged(&numberOfResultPoints, sizeof(size_t));
+		cudaMemset(numberOfResultPoints, 0, sizeof(size_t));
+
+		CUDA::ExtractSurfacePoints(volume, volumeDimension, voxelSize, aabb.min(), resultPoints, numberOfResultPoints);
+
+		cudaFree(volume);
+
+		cudaDeviceSynchronize();
 
 		printf("Number of surface voxeles : %llu\n", numberOfSurfaceVoxels);
+		printf("Number of result points : %llu\n", *numberOfResultPoints);
+
+		PLYFormat ply;
+
+		auto nop = *numberOfResultPoints;
+		CUDA::Point* h_resultPoints = new CUDA::Point[nop];
+		cudaMemcpy(h_resultPoints, resultPoints, sizeof(CUDA::Point) * nop, cudaMemcpyDeviceToHost);
+
+		for (size_t i = 0; i < nop; i++)
+		{
+			auto& p = h_resultPoints[i];
+
+			Eigen::Vector3f tp = p.position - modelTranslation;
+
+			ply.AddPointFloat3(tp.data());
+			ply.AddNormalFloat3(p.normal.data());
+			ply.AddColorFloat3(p.color.data());
+
+			Color4 c;
+			c.FromNormalzed(p.color.x(), p.color.y(), p.color.z(), 1.0f);
+
+			VD::AddCube("ResultPoints", p.position, { 0.1f, 0.1f, 0.1f }, {0.0f, 0.0f, 1.0f}, c);
+		}
+
+		ply.Serialize("C:\\Resources\\Debug\\Temp.ply");
+
+
+		cudaFree(resultPoints);
+		cudaFree(numberOfResultPoints);
 
 		return;
 
@@ -2082,6 +2128,13 @@ void AppStartCallback_Simple(App* pApp)
 
 void AppStartCallback(App* pApp)
 {
+	VisualDebugging::AddLine("axes", { 0, 0, 0 }, { 100 * 0.5f, 0.0f, 0.0f }, Color4::Red);
+	VisualDebugging::AddLine("axes", { 0, 0, 0 }, { 0.0f, 100 * 0.5f, 0.0f }, Color4::Green);
+	VisualDebugging::AddLine("axes", { 0, 0, 0 }, { 0.0f, 0.0f, 100 * 0.5f }, Color4::Blue);
+
+	CUDA::TestOctree();
+	return;
+
 	AppStartCallback_Integrate(pApp);
 	//AppStartCallback_Convert(pApp);
 	//AppStartCallback_LoadPNT(pApp);

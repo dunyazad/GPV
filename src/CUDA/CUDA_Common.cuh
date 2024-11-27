@@ -3,11 +3,16 @@
 #include <assert.h>
 #include <stdio.h>
 #include <iostream>
+#include <stack>
 #include <vector>
 
 #include <cuda_runtime.h>
 #include <cooperative_groups.h>
 #include <nvtx3/nvToolsExt.h>
+
+#include <thrust/reduce.h>
+#include <thrust/device_vector.h>
+#include <thrust/host_vector.h>
 
 #include <Eigen/Dense>
 #include <Eigen/Sparse>

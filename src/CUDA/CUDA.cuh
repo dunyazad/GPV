@@ -4,11 +4,17 @@
 
 namespace CUDA
 {
-	class Voxel
+	struct Voxel
 	{
-	public:
 		float tsdfValue = FLT_MAX;
 		float weight = 0.0f;
+		Eigen::Vector3f normal = Eigen::Vector3f(0.0f, 0.0f, 0.0f);
+		Eigen::Vector3f color = Eigen::Vector3f(1.0f, 1.0f, 1.0f);
+	};
+
+	struct Point
+	{
+		Eigen::Vector3f position = Eigen::Vector3f(0.0f, 0.0f, 0.0f);
 		Eigen::Vector3f normal = Eigen::Vector3f(0.0f, 0.0f, 0.0f);
 		Eigen::Vector3f color = Eigen::Vector3f(1.0f, 1.0f, 1.0f);
 	};
@@ -42,10 +48,12 @@ namespace CUDA
 
 	void GeneratePatchNormals(int width, int height, float3* points, size_t numberOfPoints, float3* normals);
 
-	void ClearVolume(Voxel* volume, int3 volumeDimension);
+	void ClearVolume(Voxel* volume, uint3 volumeDimension);
 
-	void IntegrateInputPoints(Voxel* volume, int3 volumeDimension, float voxelSize,
+	void IntegrateInputPoints(Voxel* volume, uint3 volumeDimension, float voxelSize,
 		size_t numberOfInputPoints, Eigen::Vector3f* inputPoints, Eigen::Vector3f* inputNormals, Eigen::Vector3f* inputColors);
 
-	size_t GetNumberOfSurfaceVoxels(Voxel* volume, int3 volumeDimension, float voxelSize);
+	size_t GetNumberOfSurfaceVoxels(Voxel* volume, uint3 volumeDimension, float voxelSize);
+
+	void ExtractSurfacePoints(Voxel* volume, uint3 volumeDimension, float voxelSize, Eigen::Vector3f volumeMin, Point* resultPoints, size_t* numberOfResultPoints);
 }

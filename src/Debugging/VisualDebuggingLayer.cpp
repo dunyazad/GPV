@@ -1035,7 +1035,7 @@ void VisualDebuggingLayer::DrawSpheres()
 		
 		points->InsertNextPoint(center.data());
 		//scales->InsertNextValue(scale);
-		scales->InsertNextTuple3(scale.x(), scale.y(), scale.z());
+		scales->InsertNextTuple3(scale.x() * 2.0f, scale.y() * 2.0f, scale.z() * 2.0f);
 		normals->InsertNextTuple3(normal.x(), normal.y(), normal.z());
 		colors->InsertNextTypedTuple(color.data());
 	}
