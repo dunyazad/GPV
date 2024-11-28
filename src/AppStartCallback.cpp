@@ -855,7 +855,7 @@ void AppStartCallback_Integrate(App* pApp)
 			ply.AddColorFloat3(p.color.data());
 
 			Color4 c;
-			c.FromNormalzed(p.color.x(), p.color.y(), p.color.z(), 1.0f);
+			c.FromNormalized(p.color.x(), p.color.y(), p.color.z(), 1.0f);
 
 			VD::AddCube("ResultPoints", p.position, { 0.1f, 0.1f, 0.1f }, {0.0f, 0.0f, 1.0f}, c);
 		}
@@ -865,8 +865,6 @@ void AppStartCallback_Integrate(App* pApp)
 
 		cudaFree(resultPoints);
 		cudaFree(numberOfResultPoints);
-
-		return;
 
 		t = Time::Now();
 		for (size_t i = 0; i < volumeDimensionX * volumeDimensionY * volumeDimensionZ; i++)
@@ -884,7 +882,7 @@ void AppStartCallback_Integrate(App* pApp)
 				//printf("%f, %f, %f\n", x, y, z);
 
 				Color4 color(255, 255, 255, 255);
-				color.FromNormalzed(volume[i].color.x(), volume[i].color.y(), volume[i].color.z(), 1.0f);
+				color.FromNormalized(volume[i].color.x(), volume[i].color.y(), volume[i].color.z(), 1.0f);
 
 				VD::AddCube("temp", { x, y, z }, 0.1f, color);
 			}
@@ -2126,16 +2124,20 @@ void AppStartCallback_Simple(App* pApp)
 	t = Time::End(t, "Visualize");
 }
 
-void AppStartCallback(App* pApp)
+void AppStartCallback_TestOctree(App* pApp)
 {
 	VisualDebugging::AddLine("axes", { 0, 0, 0 }, { 100 * 0.5f, 0.0f, 0.0f }, Color4::Red);
 	VisualDebugging::AddLine("axes", { 0, 0, 0 }, { 0.0f, 100 * 0.5f, 0.0f }, Color4::Green);
 	VisualDebugging::AddLine("axes", { 0, 0, 0 }, { 0.0f, 0.0f, 100 * 0.5f }, Color4::Blue);
 
-	CUDA::TestOctree();
-	return;
+	LoadModel(pApp->GetRenderer(), "C:\\Resources\\3D\\PLY\\Complete\\Lower.ply");
 
-	AppStartCallback_Integrate(pApp);
+	CUDA::TestOctree();
+}
+
+void AppStartCallback(App* pApp)
+{
+	//AppStartCallback_Integrate(pApp);
 	//AppStartCallback_Convert(pApp);
 	//AppStartCallback_LoadPNT(pApp);
 	//AppStartCallback_KDTree(pApp);
@@ -2143,4 +2145,6 @@ void AppStartCallback(App* pApp)
 	//AppStartCallback_Poisson(pApp);
 	//AppStartCallback_NanoVDB(pApp);
 	//AppStartCallback_Simple(pApp);
+
+	AppStartCallback_TestOctree(pApp);
 }

@@ -7,6 +7,7 @@
 #include <vector>
 
 #include <cuda_runtime.h>
+#include <curand_kernel.h>
 #include <cooperative_groups.h>
 #include <nvtx3/nvToolsExt.h>
 

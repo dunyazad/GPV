@@ -7,7 +7,7 @@ Color3::Color3(unsigned char r, unsigned char g, unsigned char b)
 	components[2] = b;
 }
 
-void Color3::FromNormalzed(float r, float g, float b)
+void Color3::FromNormalized(float r, float g, float b)
 {
 	components[0] = (unsigned char)(r * 255.0f);
 	components[1] = (unsigned char)(g * 255.0f);
@@ -40,7 +40,7 @@ Color4::Color4(unsigned char r, unsigned char g, unsigned char b, unsigned char 
 	components[3] = a;
 }
 
-void Color4::FromNormalzed(float r, float g, float b, float a)
+void Color4::FromNormalized(float r, float g, float b, float a)
 {
 	components[0] = (unsigned char)(r * 255.0f);
 	components[1] = (unsigned char)(g * 255.0f);

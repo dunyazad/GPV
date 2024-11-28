@@ -10,7 +10,7 @@ class Color3
 public:
 	Color3(unsigned char r = 255, unsigned char g = 255, unsigned char b = 255);
 	
-	void FromNormalzed(float r, float g, float b);
+	void FromNormalized(float r, float g, float b);
 
 	operator Eigen::Vector3f() const
 	{
@@ -54,7 +54,7 @@ class Color4
 public:
 	Color4(unsigned char r = 255, unsigned char g = 255, unsigned char b = 255, unsigned char a = 255);
 
-	void FromNormalzed(float r, float g, float b, float a);
+	void FromNormalized(float r, float g, float b, float a);
 
 	operator Eigen::Vector3f() const
     {

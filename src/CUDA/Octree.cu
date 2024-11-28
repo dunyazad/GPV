@@ -44,9 +44,9 @@ namespace CUDA
 		void Clear()
 		{
 			numberOfInputPoints = 0;
-			cudaMemset(&inputPoints, 0, sizeof(Eigen::Vector3f) * width * height);
-			cudaMemset(&inputNormals, 0, sizeof(Eigen::Vector3f) * width * height);
-			cudaMemset(&inputColors, 0, sizeof(Eigen::Vector3f) * width * height);
+			cudaMemset(inputPoints, 0, sizeof(Eigen::Vector3f) * width * height);
+			cudaMemset(inputNormals, 0, sizeof(Eigen::Vector3f) * width * height);
+			cudaMemset(inputColors, 0, sizeof(Eigen::Vector3f) * width * height);
 		}
 
 		void FromPLYFile(const PLYFormat& ply)
@@ -57,6 +57,16 @@ namespace CUDA
 			cudaMemcpy(inputPoints, ply.GetPoints().data(), sizeof(Eigen::Vector3f) * numberOfInputPoints, cudaMemcpyHostToDevice);
 			cudaMemcpy(inputNormals, ply.GetNormals().data(), sizeof(Eigen::Vector3f) * numberOfInputPoints, cudaMemcpyHostToDevice);
 			cudaMemcpy(inputColors, ply.GetColors().data(), sizeof(Eigen::Vector3f) * numberOfInputPoints, cudaMemcpyHostToDevice);
+
+			//for (size_t i = 0; i < numberOfInputPoints; i++)
+			//{
+			//	auto p = inputPoints[i];
+			//	auto n = inputNormals[i];
+			//	auto c = inputColors[i];
+			//	Color4 c4;
+			//	c4.FromNormalized(c.x(), c.y(), c.z(), 1.0f);
+			//	VD::AddSphere("points", p, { 0.05f, 0.05f, 0.05f }, n, c4);
+			//}
 		}
 	};
 
@@ -72,6 +82,7 @@ namespace CUDA
 	struct Octant
 	{
 		T data;
+		int depth;
 		unsigned int lock;
 		size_t mortonCode;
 		Octant<T>* children[8];
@@ -110,33 +121,30 @@ namespace CUDA
 			{
 			}
 
-			__device__ uint64_t GetMortonCode(const Eigen::Vector3f& position)
-			{
-				// Step 1: Normalize the position to be within the range [0, 1] relative to the bounds of the octree
+			__device__ uint64_t GetMortonCode(const Eigen::Vector3f& position) {
+				// Normalize position to range [0, 1] using the bounding box
 				Eigen::Vector3f relativePos = (position - min).cwiseQuotient(max - min);
-
-				// Clamp the relative position to the range [0, 1]
 				relativePos.x() = fminf(fmaxf(relativePos.x(), 0.0f), 1.0f);
 				relativePos.y() = fminf(fmaxf(relativePos.y(), 0.0f), 1.0f);
 				relativePos.z() = fminf(fmaxf(relativePos.z(), 0.0f), 1.0f);
 
-				// Step 2: Scale relative position to integer coordinates within the given depth
-				// Convert [0, 1] to a value in [0, 2^depth - 1]
+				// To improve precision, scale up the result to the range of the Morton grid size
 				uint32_t maxCoordinateValue = (1 << maxDepth) - 1;
-
-				// Map the relative positions to integer grid
 				uint32_t x = static_cast<uint32_t>(relativePos.x() * maxCoordinateValue);
 				uint32_t y = static_cast<uint32_t>(relativePos.y() * maxCoordinateValue);
 				uint32_t z = static_cast<uint32_t>(relativePos.z() * maxCoordinateValue);
 
-				// Step 3: Interleave the bits of x, y, and z to generate the Morton code
+				// Interleave bits of x, y, z to generate the Morton code
 				uint64_t mortonCode = 0;
-				for (int i = 0; i < maxDepth; ++i)
-				{
+				for (int i = 0; i < maxDepth; ++i) {
 					mortonCode |= ((x >> i) & 1ULL) << (3 * i);
 					mortonCode |= ((y >> i) & 1ULL) << (3 * i + 1);
 					mortonCode |= ((z >> i) & 1ULL) << (3 * i + 2);
 				}
+
+				// Debug print for Morton code
+				printf("Position: (%f, %f, %f), Relative Position: (%f, %f, %f), Morton Code: %llu\n",
+					position.x(), position.y(), position.z(), relativePos.x(), relativePos.y(), relativePos.z(), mortonCode);
 
 				return mortonCode;
 			}
@@ -146,84 +154,60 @@ namespace CUDA
 			{
 				auto index = atomicAdd(nextAllocationIndex, 1);
 				if (index >= allocatedCount) return nullptr;
+				allocated[index].depth = 0;
+				allocated[index].lock = 0;
+				allocated[index].mortonCode = 0;
+				allocated[index].children[0]= nullptr;
+				allocated[index].children[1] = nullptr;
+				allocated[index].children[2] = nullptr;
+				allocated[index].children[3] = nullptr;
+				allocated[index].children[4] = nullptr;
+				allocated[index].children[5] = nullptr;
+				allocated[index].children[6] = nullptr;
+				allocated[index].children[7] = nullptr;
 				return &allocated[index];
 			}
 
-			__device__
-				Octant<T>* AllocateOctantsUsingMortonCode(size_t mortonCode)
-			{
-				// Start at the root octant
+
+			__device__ Octant<T>* AllocateOctantsUsingMortonCode(size_t mortonCode) {
 				Octant<T>* current = root;
 
-				if (current == nullptr)
-				{
-					// If the root is null, allocate it first
-					current = AllocateOctant();
-					if (current == nullptr)
-					{
-						printf("Root allocation failed.\n");
-						return nullptr;
-					}
+				for (int level = 0; level < maxDepth; ++level) {
+					int childIndex = (mortonCode >> (3 * level)) & 0x7;
 
-					// Attempt to lock the newly allocated root
-					unsigned int expected = 0;
-					if (atomicCAS(&(current->lock), expected, 1) != expected)
-					{
-						printf("Failed to acquire lock for the root.\n");
-						return nullptr;
-					}
-
-					root = current;
-					atomicExch(&(current->lock), 0); // Release the lock
-				}
-
-				// Traverse the octree using the Morton code, allocating octants if necessary
-				for (int level = 0; level < sizeof(size_t) * 8 / 3; ++level)
-				{
-					// Extract the next 3 bits from the Morton code, which tell us which child to move to
-					int childIndex = (mortonCode >> (3 * level)) & 0x7; // Get 3 bits for each level, range 0-7
-
-					// If the current octant's child is null, allocate it
-					if (current->children[childIndex] == nullptr)
-					{
-						// Lock the current octant to allocate a new child safely
+					if (current->children[childIndex] == nullptr) {
 						unsigned int expected = 0;
-						if (atomicCAS(&(current->lock), expected, 1) != expected)
-						{
-							// If we cannot acquire the lock, it means another thread is modifying it
-							// Retry the current level
-							--level;  // Retry the current level
-							continue;
+						while (atomicCAS(&(current->lock), expected, 1) != expected) {
+							// Wait until lock is available
 						}
 
-						// Double-check if the child is still null after acquiring the lock
-						if (current->children[childIndex] == nullptr)
-						{
-							// Allocate a new child octant
+						if (current->children[childIndex] == nullptr) {
 							Octant<T>* newChild = AllocateOctant();
-							if (newChild == nullptr)
-							{
-								// Allocation failed, print error and stop further allocations
-								printf("Failed to allocate child octant at level %d.\n", level);
-								atomicExch(&(current->lock), 0); // Release the lock
+							if (newChild == nullptr) {
+								printf("Failed to allocate child octant at depth %d.\n", level);
+								atomicExch(&(current->lock), 0); // Release lock
 								return nullptr;
 							}
 
-							// Initialize the new child octant pointer
+							newChild->depth = current->depth + 1;
+							newChild->mortonCode = mortonCode & ((1ULL << (3 * (level + 1))) - 1);
+
 							current->children[childIndex] = newChild;
+
+							printf("Allocated child octant at depth %d, Morton Code: %llu, Index: %d\n",
+								level + 1, newChild->mortonCode, childIndex);
 						}
 
-						// Release the lock after child allocation
-						atomicExch(&(current->lock), 0);
+						atomicExch(&(current->lock), 0); // Release lock
 					}
 
-					// Move to the child octant for the next iteration
 					current = current->children[childIndex];
 				}
 
-				// Return the pointer to the leaf octant
 				return current;
 			}
+
+
 		};
 
 		Internal* internal;
@@ -285,17 +269,19 @@ namespace CUDA
 				return;
 			}
 
-			*(internal->nextAllocationIndex) = 0;
-
 			// Ensure root allocation if required
 			if (internal->allocatedCount > 0)
 			{
 				internal->root = &internal->allocated[0];  // Assign first octant as root
+				internal->root->depth = 0;
 				internal->root->lock = 0;
+				internal->root->mortonCode = 0;
 				for (int i = 0; i < 8; ++i)
 				{
 					internal->root->children[i] = nullptr;  // Initialize children as null
 				}
+
+				*(internal->nextAllocationIndex) = 1;
 			}
 
 			internal->initialized = true;
@@ -363,69 +349,77 @@ namespace CUDA
 		printf("%s\n", buffer);
 	}
 
-	Eigen::Vector3f CalculatePositionFromMortonCode(uint64_t mortonCode, int depth, const Eigen::Vector3f& min, const Eigen::Vector3f& max)
-	{
-		// Step 1: Extract the x, y, z coordinates from the Morton code
-		uint32_t x = 0, y = 0, z = 0;
-
-		for (int i = 0; i < depth; ++i)
-		{
-			x |= ((mortonCode >> (3 * i)) & 1ULL) << i;
-			y |= ((mortonCode >> (3 * i + 1)) & 1ULL) << i;
-			z |= ((mortonCode >> (3 * i + 2)) & 1ULL) << i;
+	// Utility Functions for Morton Code
+	uint32_t ExtractBitsFromMorton(uint64_t mortonCode, int startBit, int depth) {
+		uint32_t value = 0;
+		for (int i = 0; i < depth; ++i) {
+			value |= ((mortonCode >> (3 * i + startBit)) & 1ULL) << i;
 		}
-
-		// Step 2: Convert the extracted coordinates to normalized values in [0, 1]
-		uint32_t maxCoordinateValue = (1 << depth) - 1;
-
-		float fx = static_cast<float>(x) / static_cast<float>(maxCoordinateValue);
-		float fy = static_cast<float>(y) / static_cast<float>(maxCoordinateValue);
-		float fz = static_cast<float>(z) / static_cast<float>(maxCoordinateValue);
-
-		// Step 3: Scale the normalized coordinates to the actual space defined by min and max
-		Eigen::Vector3f relativePosition(fx, fy, fz);
-		Eigen::Vector3f position = min + relativePosition.cwiseProduct(max - min);
-
-		return position;
+		return value;
 	}
 
+	Eigen::Vector3f CalculatePositionFromMortonCode(uint64_t mortonCode, int depth, const Eigen::Vector3f& min, const Eigen::Vector3f& max) {
+		uint32_t x = ExtractBitsFromMorton(mortonCode, 0, depth);
+		uint32_t y = ExtractBitsFromMorton(mortonCode, 1, depth);
+		uint32_t z = ExtractBitsFromMorton(mortonCode, 2, depth);
+
+		uint32_t numSubdivisions = 1 << depth;
+		Eigen::Vector3f voxelSize = (max - min) / numSubdivisions;
+
+		return min + Eigen::Vector3f(x, y, z).cwiseProduct(voxelSize) + (voxelSize * 0.5f);
+	}
+
+
+	// Voxel 크기 계산
 	Eigen::Vector3f CalculateVoxelSizeFromMortonCode(uint64_t mortonCode, int depth, const Eigen::Vector3f& min, const Eigen::Vector3f& max)
 	{
-		// Calculate the full span of the octree bounding box
+		// Step 1: 경계 박스의 전체 길이 계산
 		Eigen::Vector3f span = max - min;
 
-		// Calculate the number of subdivisions along each axis at the given depth
-		// At each depth level, we split each axis by 2. Thus, there are 2^depth subdivisions per axis.
-		float subdivisions = static_cast<float>(1 << depth);  // This computes 2^depth as a float
+		// Step 2: 주어진 깊이에 따른 세분화 수 계산
+		// 각 축은 2^depth 만큼 나뉨
+		float subdivisions = static_cast<float>(1 << depth); // 2^depth
 
-		// Calculate the size of the voxel in each dimension
-		// The size of each voxel along a dimension is the span of that dimension divided by the number of subdivisions
+		// Step 3: 각 축에 대한 Voxel 크기 계산
 		Eigen::Vector3f voxelSize = span / subdivisions;
 
-		// Return the voxel size along x, y, and z
-		return voxelSize;
+		// Voxel 크기 출력
+		////////////////////////////////////////////////////////////std::cout << "Voxel Size (x, y, z): " << voxelSize.transpose() << std::endl;
+
+		return voxelSize; // x, y, z 방향의 Voxel 크기를 벡터로 반환
 	}
 
 
 	template<typename T>
-	__global__ void Kernel_Insert(Octree<T>::Internal* octree, PatchBuffers patchBuffers)
-	{
+	__global__ void Kernel_Insert(Octree<T>::Internal* octree, PatchBuffers patchBuffers) {
 		unsigned int threadid = blockDim.x * blockIdx.x + threadIdx.x;
-		if (threadid > patchBuffers.numberOfInputPoints - 1) return;
+		if (threadid >= patchBuffers.numberOfInputPoints) return;
 
-		//auto node = octree->AllocateOctant();
-		//if (nullptr == node)
-		//{
-		//	printf("AllocatedOctant Failed.\n");
-		//	return;
-		//}
+		// Initialize cuRAND for each thread
+		curandState state;
+		curand_init(1234, threadid, 0, &state); // 1234 is the seed, threadid ensures unique seed per thread
 
-		auto& p = patchBuffers.inputPoints[threadid];
+		Eigen::Vector3f p = patchBuffers.inputPoints[threadid];
+
+		// Generate small perturbation using curand_uniform to avoid coincident Morton codes
+		float epsilon = 1e-3f;  // Increased perturbation
+		p.x() += epsilon * curand_uniform(&state);
+		p.y() += epsilon * curand_uniform(&state);
+		p.z() += epsilon * curand_uniform(&state);
+
+		// Get Morton code for the perturbed point
 		auto mortonCode = octree->GetMortonCode(p);
 
-		//printBinary(mortonCode);
+		// Print Morton code to verify uniqueness
+		printf("Thread %u: Point (%f, %f, %f), Morton Code: %llu\n", threadid, p.x(), p.y(), p.z(), mortonCode);
+
 		auto node = octree->AllocateOctantsUsingMortonCode(mortonCode);
-		node->mortonCode = mortonCode;
+		if (node != nullptr) {
+			node->mortonCode = mortonCode;
+		}
+		else {
+			printf("Failed to allocate node for point at Morton code %llu.\n", mortonCode);
+		}
 	}
 
 	template<typename T>
@@ -435,8 +429,7 @@ namespace CUDA
 		int gridsize = ((uint32_t)patchBuffers.numberOfInputPoints + threadblocksize - 1) / threadblocksize;
 
 		Kernel_Insert<T> << <gridsize, threadblocksize >> > (internal, patchBuffers);
-
-		cudaDeviceSynchronize();
+		cudaDeviceSynchronize(); // Ensure kernel execution is complete
 	}
 
 	void TestOctree()
@@ -446,7 +439,8 @@ namespace CUDA
 		Octree<Point> octree;
 		//octree.Initialize(Eigen::Vector3f(-25.0f, -25.0f, -25.0f), Eigen::Vector3f(25.0f, 25.0f, 25.0f), 15000000);
 		//octree.Initialize(Eigen::Vector3f(-50.0f, -50.0f, -50.0f), Eigen::Vector3f(50.0f, 50.0f, 50.0f), 150000000);
-		octree.Initialize(14, Eigen::Vector3f(-100.0f, -100.0f, -100.0f), Eigen::Vector3f(100.0f, 100.0f, 100.0f), 150000000);
+		//octree.Initialize(1, Eigen::Vector3f(-100.0f, -100.0f, -100.0f), Eigen::Vector3f(100.0f, 100.0f, 100.0f), 15000000);
+		octree.Initialize(1, Eigen::Vector3f(-100.0f, -100.0f, -100.0f), Eigen::Vector3f(100.0f, 100.0f, 100.0f), 50);
 
 		t = Time::End(t, "Octants allocation");
 
@@ -478,61 +472,153 @@ namespace CUDA
 		//	t = Time::End(t, "Insert using PatchBuffers");
 		//}
 
+		/*
 		{
-				t = Time::Now();
+			t = Time::Now();
 
-				stringstream ss;
-				ss << "C:\\Resources\\3D\\PLY\\Complete\\Lower_pointcloud.ply";
+			stringstream ss;
+			ss << "C:\\Resources\\3D\\PLY\\Complete\\Lower_pointcloud.ply";
 
-				PLYFormat ply;
-				ply.Deserialize(ss.str());
+			PLYFormat ply;
+			ply.Deserialize(ss.str());
+			cout << "ply min : " << ply.GetAABB().min().transpose() << endl;
+			cout << "ply max : " << ply.GetAABB().max().transpose() << endl;
 
-				t = Time::End(t, "Load ply");
+			t = Time::End(t, "Load ply");
 
-				PatchBuffers patchBuffers(ply.GetPoints().size() / 3, 1);
-				patchBuffers.FromPLYFile(ply);
+			PatchBuffers patchBuffers(ply.GetPoints().size() / 3, 1);
+			patchBuffers.FromPLYFile(ply);
 
-				t = Time::End(t, "Copy data to device");
+			t = Time::End(t, "Copy data to device");
 
-				nvtxRangePushA("Insert");
+			nvtxRangePushA("Insert");
 
-				octree.Insert(patchBuffers);
+			octree.Insert(patchBuffers);
 
-				nvtxRangePop();
+			nvtxRangePop();
 
-				t = Time::End(t, "Insert using PatchBuffers");
+			t = Time::End(t, "Insert using PatchBuffers");
 		}
+		*/
+
+		{
+			t = Time::Now();
+
+			PatchBuffers patchBuffers(8, 1);
+			patchBuffers.inputPoints[0] = Eigen::Vector3f(-50.0f, -50.0f, -50.0f);
+			patchBuffers.inputPoints[1] = Eigen::Vector3f(50.0f, -50.0f, -50.0f);
+			patchBuffers.inputPoints[2] = Eigen::Vector3f(-50.0f, 50.0f, -50.0f);
+			patchBuffers.inputPoints[3] = Eigen::Vector3f(50.0f, 50.0f, -50.0f);
+			patchBuffers.inputPoints[4] = Eigen::Vector3f(-50.0f, -50.0f, 50.0f);
+			patchBuffers.inputPoints[5] = Eigen::Vector3f(50.0f, -50.0f, 50.0f);
+			patchBuffers.inputPoints[6] = Eigen::Vector3f(-50.0f, 50.0f, 50.0f);
+			patchBuffers.inputPoints[7] = Eigen::Vector3f(50.0f, 50.0f, 50.0f);
+
+			patchBuffers.inputNormals[0] = Eigen::Vector3f(0.0f, 0.0f, 1.0f);
+			patchBuffers.inputNormals[1] = Eigen::Vector3f(0.0f, 0.0f, 1.0f);
+			patchBuffers.inputNormals[2] = Eigen::Vector3f(0.0f, 0.0f, 1.0f);
+			patchBuffers.inputNormals[3] = Eigen::Vector3f(0.0f, 0.0f, 1.0f);
+			patchBuffers.inputNormals[4] = Eigen::Vector3f(0.0f, 0.0f, 1.0f);
+			patchBuffers.inputNormals[5] = Eigen::Vector3f(0.0f, 0.0f, 1.0f);
+			patchBuffers.inputNormals[6] = Eigen::Vector3f(0.0f, 0.0f, 1.0f);
+			patchBuffers.inputNormals[7] = Eigen::Vector3f(0.0f, 0.0f, 1.0f);
+
+			patchBuffers.inputColors[0] = Eigen::Vector3f(1.0f, 1.0f, 1.0f);
+			patchBuffers.inputColors[1] = Eigen::Vector3f(1.0f, 1.0f, 1.0f);
+			patchBuffers.inputColors[2] = Eigen::Vector3f(1.0f, 1.0f, 1.0f);
+			patchBuffers.inputColors[3] = Eigen::Vector3f(1.0f, 1.0f, 1.0f);
+			patchBuffers.inputColors[4] = Eigen::Vector3f(1.0f, 1.0f, 1.0f);
+			patchBuffers.inputColors[5] = Eigen::Vector3f(1.0f, 1.0f, 1.0f);
+			patchBuffers.inputColors[6] = Eigen::Vector3f(1.0f, 1.0f, 1.0f);
+			patchBuffers.inputColors[7] = Eigen::Vector3f(1.0f, 1.0f, 1.0f);
+
+			t = Time::End(t, "Copy data to device");
+
+			for (int i = 0; i < 8; ++i) {
+				std::cout << "Host point[" << i << "]: " << patchBuffers.inputPoints[i].transpose() << std::endl;
+				VD::AddSphere("center", patchBuffers.inputPoints[i], { 1.0f, 1.0f, 1.0f }, {0.0f, 0.0f, 1.0f}, Color4::Red);
+			}
+
+			cudaDeviceSynchronize();
+
+			nvtxRangePushA("Insert");
+
+			octree.Insert(patchBuffers);
+
+			nvtxRangePop();
+
+			t = Time::End(t, "Insert using PatchBuffers");
+		}
+
 
 		t = Time::Now();
-
+		
 		printf("GetAllLeafPositions begins\n");
 
-		auto nov = *(octree.internal->nextAllocationIndex);
-		for (size_t i = 0; i < nov; i++)
+		auto root = octree.internal->root;
+		printf("root : %d\n", root->mortonCode);
+
+		auto current = root;
+		stack<Octant<Point>*> octantStack;
+		octantStack.push(root);
+
+		while (false == octantStack.empty())
 		{
-			auto& octant = octree.internal->allocated[i];
+			current = octantStack.top();
+			octantStack.pop();
 
-			bool isLeaf = true;
-			for (size_t i = 0; i < 8; i++)
+			auto p = CalculatePositionFromMortonCode(current->mortonCode, current->depth, octree.internal->min, octree.internal->max);
+			auto voxelSize = CalculateVoxelSizeFromMortonCode(current->mortonCode, current->depth, octree.internal->min, octree.internal->max);
+			cout << "Depth : " << current->depth << endl;
+			cout << "Morton Code : " << current->mortonCode << endl;
+			cout << "Position : " << p.transpose() << endl;
+			cout << "VoxelSize : " << voxelSize.transpose() << endl;
+
+			stringstream ss;
+			ss << "cube_" << current->depth;
+			VD::AddCube(ss.str(), p, voxelSize * 0.5f, { 0.0f, 0.0f, 1.0f }, Color4::White);
+
+			printf("----------------------------------------------------------------------------------------------------\n");
+
+			for (int i = 0; i < 8; i++)
 			{
-				if (nullptr != octant.children[i])
+				if (nullptr != current->children[i])
 				{
-					isLeaf = false;
-					break;
-				}
-			}
-
-			if (isLeaf)
-			{
-				if (0 != octant.mortonCode)
-				{
-					//printBinary(octant.mortonCode);
-
-					auto p = CalculatePositionFromMortonCode(octant.mortonCode, octree.internal->maxDepth, octree.internal->min, octree.internal->max);
-					auto voxelSize = CalculateVoxelSizeFromMortonCode(octant.mortonCode, octree.internal->maxDepth, octree.internal->min, octree.internal->max);
-					VD::AddCube("cube", p, voxelSize * 2.0f, { 0.0f, 0.0f, 1.0f }, Color4::White);
+					octantStack.push(current->children[i]);
 				}
 			}
 		}
+
+		//auto nov = *(octree.internal->nextAllocationIndex);
+		//for (size_t i = 0; i < nov; i++)
+		//{
+		//	auto& octant = octree.internal->allocated[i];
+
+		//	bool isLeaf = true;
+		//	for (size_t i = 0; i < 8; i++)
+		//	{
+		//		if (nullptr != octant.children[i])
+		//		{
+		//			isLeaf = false;
+		//			break;
+		//		}
+		//	}
+
+		//	//if (isLeaf)
+		//	{
+		//		if (0 != octant.mortonCode)
+		//		{
+		//			printBinary(octant.mortonCode);
+
+		//			auto p = CalculatePositionFromMortonCode(octant.mortonCode, octree.internal->maxDepth, octree.internal->min, octree.internal->max);
+		//			cout << p.transpose() << endl;
+		//			auto voxelSize = CalculateVoxelSizeFromMortonCode(octant.mortonCode, octree.internal->maxDepth, octree.internal->min, octree.internal->max);
+		//			//printf("voxelSize : %f, %f, %f\n", voxelSize.x(), voxelSize.y(), voxelSize.z());
+		//			VD::AddCube("cube", p, voxelSize * 0.5f, { 0.0f, 0.0f, 1.0f }, Color4::White);
+		//		}
+		//	}
+		//}
+
+		//VD::AddCube("cube", { 0.0f, 0.0f, 0.0f }, { 50.0f, 50.0f, 50.0f }, { 0.0f, 0.0f, 1.0f }, Color4::Red);
 	}
 }
