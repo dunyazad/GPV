@@ -395,9 +395,9 @@ void LoadDepthImage()
 
 bool enabledToCapture = false;
 
-void AppStartCallback_Capture(App* pApp)
+bool AppStartCallback_Capture(App* pApp)
 {
-	pApp->AddAppUpdateCallback([&](App* pApp) {
+	pApp->AddAppUpdateCallback([&](App* pApp) -> bool {
 		if (enabledToCapture)
 		{
 			CaptureNextFrame(pApp);
@@ -417,6 +417,8 @@ void AppStartCallback_Capture(App* pApp)
 			{ 0.0f, 0.0f, 1.0f },
 			c);
 		index++;
+
+		return true;
 	});
 
 	auto renderer = pApp->GetRenderer();
@@ -2147,7 +2149,7 @@ void AppStartCallback_TestRegularGrid(App* pApp)
 	CUDA::TestRegularGrid();
 }
 
-void AppStartCallback(App* pApp)
+bool AppStartCallback(App* pApp)
 {
 	//AppStartCallback_Integrate(pApp);
 	//AppStartCallback_Convert(pApp);
@@ -2160,4 +2162,6 @@ void AppStartCallback(App* pApp)
 
 	//AppStartCallback_TestOctree(pApp);
 	AppStartCallback_TestRegularGrid(pApp);
+
+	return true;
 }

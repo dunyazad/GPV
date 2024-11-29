@@ -18,7 +18,7 @@ AppEventHandler::~AppEventHandler()
 {
 }
 
-void OnKeyPress(App* app)
+bool OnKeyPress(App* app)
 {
 	vtkRenderWindowInteractor* interactor = app->GetInteractor();
 	vtkRenderWindow* renderWindow = interactor->GetRenderWindow();
@@ -26,6 +26,7 @@ void OnKeyPress(App* app)
 	vtkCamera* camera = renderer->GetActiveCamera();
 
 	std::string key = interactor->GetKeySym();
+	app->GetKeyStates()[key] = true;
 
 	printf("%s\n", key.c_str());
 
@@ -244,18 +245,35 @@ void OnKeyPress(App* app)
 	{
 		//interactor->InvokeEvent(vtkCommand::MouseWheelForwardEvent);
 	}
+
+	return true;
 }
 
-void OnMouseButtonPress(App* app, int button)
+bool OnKeyRelease(App* app)
+{
+	vtkRenderWindowInteractor* interactor = app->GetInteractor();
+	vtkRenderWindow* renderWindow = interactor->GetRenderWindow();
+	vtkRenderer* renderer = renderWindow->GetRenderers()->GetFirstRenderer();
+	vtkCamera* camera = renderer->GetActiveCamera();
+
+	std::string key = interactor->GetKeySym();
+	app->GetKeyStates()[key] = false;
+
+	return true;
+}
+
+bool OnMouseButtonPress(App* app, int button)
 {
 	if (button == 0)
 	{
 		//selectedIndices.clear();
 		//VD::Clear("NN");
 	}
+
+	return true;
 }
 
-void OnMouseButtonRelease(App* app, int button)
+bool OnMouseButtonRelease(App* app, int button)
 {
 	vtkRenderWindowInteractor* interactor = app->GetInteractor();
 	vtkRenderWindow* renderWindow = interactor->GetRenderWindow();
@@ -450,9 +468,11 @@ void OnMouseButtonRelease(App* app, int button)
 		////////////camera->SetFocalPoint(minX, minY, minZ);
 		////////////renderWindow->Render();
 	}
+
+	return true;
 }
 
-void OnMouseMove(App* app, int posx, int posy, int lastx, int lasty, bool lButton, bool mButton, bool rButton)
+bool OnMouseMove(App* app, int posx, int posy, int lastx, int lasty, bool lButton, bool mButton, bool rButton)
 {
 	vtkRenderWindowInteractor* interactor = app->GetInteractor();
 	vtkRenderWindow* renderWindow = interactor->GetRenderWindow();
@@ -597,10 +617,31 @@ void OnMouseMove(App* app, int posx, int posy, int lastx, int lasty, bool lButto
 	//	//VisualDebugging::AddLine("ViewDirection", cameraPosition, cameraPosition + rayDirection * 1000, Color4::Red);
 	//	VisualDebugging::AddLine("ViewDirection", cameraPosition, worldSpacePoint, Color4::Red);
 	//}
+
+	return true;
+}
+
+bool OnMouseWheelScroll(App* app, bool isForward)
+{
+	if (app->GetKeyState("Control_L"))
+	{
+		if (isForward)
+		{
+			printf("Forward\n");
+		}
+		else
+		{
+			printf("Backward\n");
+		}
+
+		return false;
+	}
+
+	return true;
 }
 
 #ifdef _WINDOWS
-void OnUSBEvent(App* app, USBEvent usbEvent)
+bool OnUSBEvent(App* app, USBEvent usbEvent)
 {
 	auto interactor = app->GetInteractor();
 
@@ -616,5 +657,7 @@ void OnUSBEvent(App* app, USBEvent usbEvent)
 			interactor->InvokeEvent(vtkCommand::MouseWheelBackwardEvent);
 		}
 	}
+
+	return true;
 }
 #endif

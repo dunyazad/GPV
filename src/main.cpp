@@ -5,7 +5,7 @@
 #include <Debugging/VisualDebugging.h>
 using VD = VisualDebugging;
 
-void AppStartCallback(App* pApp);
+bool AppStartCallback(App* pApp);
 
 int mode = 0;
 
@@ -18,6 +18,7 @@ int main()
 	app.AddMouseButtonPressCallback(OnMouseButtonPress);
 	app.AddMouseButtonReleaseCallback(OnMouseButtonRelease);
 	app.AddMouseMoveCallback(OnMouseMove);
+	app.AddMouseWheelScrollCallback(OnMouseWheelScroll);
 #ifdef _WINDOWS
 	app.AddUSBEventCallback(OnUSBEvent);
 #endif

@@ -24,6 +24,8 @@ public:
 
     void OnKeyPress() override;
     void OnMouseMove() override;
+    void OnMouseWheelForward() override;
+    void OnMouseWheelBackward() override;
 
     inline void SetApp(App* app) { this->app = app; }
 

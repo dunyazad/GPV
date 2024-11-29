@@ -14,11 +14,13 @@ private:
 
 };
 
-void OnKeyPress(App* app);
+bool OnKeyPress(App* app);
+bool OnKeyRelease(App* app);
 
-void OnMouseButtonPress(App* app, int button);
-void OnMouseButtonRelease(App* app, int button);
-void OnMouseMove(App* app, int posx, int posy, int lastx, int lasty, bool lButton, bool mButton, bool rButton);
+bool OnMouseButtonPress(App* app, int button);
+bool OnMouseButtonRelease(App* app, int button);
+bool OnMouseMove(App* app, int posx, int posy, int lastx, int lasty, bool lButton, bool mButton, bool rButton);
+bool OnMouseWheelScroll(App* app, bool isForward);
 #ifdef _WINDOWS
-void OnUSBEvent(App* app, USBEvent usbEvent);
+bool OnUSBEvent(App* app, USBEvent usbEvent);
 #endif

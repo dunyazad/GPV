@@ -20,7 +20,8 @@ void CustomTrackballStyle::OnLeftButtonDown()
         HandleBothButtons();
     }
 
-    app->OnMouseButtonPress(0);
+    bool propagateEvent = true;
+    propagateEvent = app->OnMouseButtonPress(0);
 
     //vtkInteractorStyleTrackballCamera::OnLeftButtonDown();
 }
@@ -30,9 +31,13 @@ void CustomTrackballStyle::OnMiddleButtonDown()
     MiddleButtonPressed = true;
     std::cout << "Middle Button Pressed" << std::endl;
 
-    app->OnMouseButtonPress(1);
+    bool propagateEvent = true;
+    propagateEvent = app->OnMouseButtonPress(1);
 
-    vtkInteractorStyleTrackballCamera::OnMiddleButtonDown();
+    if (propagateEvent)
+    {
+        vtkInteractorStyleTrackballCamera::OnMiddleButtonDown();
+    }
 }
 
 void CustomTrackballStyle::OnRightButtonDown()
@@ -46,9 +51,13 @@ void CustomTrackballStyle::OnRightButtonDown()
         HandleBothButtons();
     }
 
-    app->OnMouseButtonPress(2);
+    bool propagateEvent = true;
+    propagateEvent = app->OnMouseButtonPress(2);
 
-    vtkInteractorStyleTrackballCamera::OnLeftButtonDown();
+    if (propagateEvent)
+    {
+        vtkInteractorStyleTrackballCamera::OnLeftButtonDown();
+    }
 }
 
 void CustomTrackballStyle::OnLeftButtonUp()
@@ -56,7 +65,8 @@ void CustomTrackballStyle::OnLeftButtonUp()
     LeftButtonPressed = false;
     std::cout << "Left Button Released" << std::endl;
 
-    app->OnMouseButtonRelease(0);
+    bool propagateEvent = true;
+    propagateEvent = app->OnMouseButtonRelease(0);
 
     //vtkInteractorStyleTrackballCamera::OnLeftButtonUp();
 }
@@ -66,9 +76,13 @@ void CustomTrackballStyle::OnMiddleButtonUp()
     MiddleButtonPressed = false;
     std::cout << "Middle Button Released" << std::endl;
 
-    app->OnMouseButtonRelease(1);
+    bool propagateEvent = true;
+    propagateEvent = app->OnMouseButtonRelease(1);
 
-    vtkInteractorStyleTrackballCamera::OnMiddleButtonUp();
+    if (propagateEvent)
+    {
+        vtkInteractorStyleTrackballCamera::OnMiddleButtonUp();
+    }
 }
 
 void CustomTrackballStyle::OnRightButtonUp()
@@ -76,9 +90,13 @@ void CustomTrackballStyle::OnRightButtonUp()
     RightButtonPressed = false;
     std::cout << "Right Button Released" << std::endl;
 
-    app->OnMouseButtonRelease(2);
+    bool propagateEvent = true;
+    propagateEvent = app->OnMouseButtonRelease(2);
 
-    vtkInteractorStyleTrackballCamera::OnLeftButtonUp();
+    if (propagateEvent)
+    {
+        vtkInteractorStyleTrackballCamera::OnLeftButtonUp();
+    }
 }
 
 void CustomTrackballStyle::HandleBothButtons()
@@ -91,9 +109,13 @@ void CustomTrackballStyle::OnKeyPress()
     std::string key = this->GetInteractor()->GetKeySym();
     std::cout << "Key pressed: " << key << std::endl;
 
-    app->OnKeyPress();
+    bool propagateEvent = true;
+    propagateEvent = app->OnKeyPress();
 
-    vtkInteractorStyleTrackballCamera::OnKeyPress();
+    if (propagateEvent)
+    {
+        vtkInteractorStyleTrackballCamera::OnKeyPress();
+    }
 }
 
 void CustomTrackballStyle::OnMouseMove()
@@ -101,6 +123,30 @@ void CustomTrackballStyle::OnMouseMove()
     int* pos = this->GetInteractor()->GetEventPosition();
     int* lastPos = this->GetInteractor()->GetLastEventPosition();
 
-    app->OnMouseMove(pos[0], pos[1], lastPos[0], lastPos[1], LeftButtonPressed, MiddleButtonPressed, RightButtonPressed);
+    bool propagateEvent = true;
+    propagateEvent = app->OnMouseMove(pos[0], pos[1], lastPos[0], lastPos[1], LeftButtonPressed, MiddleButtonPressed, RightButtonPressed);
     //printf("[%4d, %4d] - [%4d, %4d]\n", lastPos[0], lastPos[1], pos[0], pos[1]);
+}
+
+void CustomTrackballStyle::OnMouseWheelForward()
+{
+    bool propagateEvent = true;
+    propagateEvent = app->OnMouseWheelScroll(true);
+
+    if (propagateEvent)
+    {
+        printf("propagate mouse wheel event\n");
+
+        vtkInteractorStyleTrackballCamera::OnMouseWheelForward();
+    }
+}
+
+void CustomTrackballStyle::OnMouseWheelBackward()
+{
+    bool propagateEvent = true;
+    propagateEvent = app->OnMouseWheelScroll(false);
+    if (propagateEvent)
+    {
+        vtkInteractorStyleTrackballCamera::OnMouseWheelBackward();
+    }
 }

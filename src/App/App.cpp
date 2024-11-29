@@ -126,12 +126,12 @@ void App::Run(AppConfiguration configuration)
 	Run();
 }
 
-void App::AddAppStartCallback(function<void(App*)> f)
+void App::AddAppStartCallback(function<bool(App*)> f)
 {
 	AddAppStartCallback("Default", f);
 }
 
-void App::AddAppStartCallback(const string& name, function<void(App*)> f)
+void App::AddAppStartCallback(const string& name, function<bool(App*)> f)
 {
 	if (0 != appStartCallbacks.count(name))
 	{
@@ -153,12 +153,12 @@ void App::RemoveAppStartCallback(const string& name)
 	}
 }
 
-void App::AddAppUpdateCallback(function<void(App*)> f)
+void App::AddAppUpdateCallback(function<bool(App*)> f)
 {
 	AddAppUpdateCallback("Default", f);
 }
 
-void App::AddAppUpdateCallback(const string& name, function<void(App*)> f)
+void App::AddAppUpdateCallback(const string& name, function<bool(App*)> f)
 {
 	if (0 != appUpdateCallbacks.count(name))
 	{
@@ -180,12 +180,12 @@ void App::RemoveAppUpdateCallback(const string& name)
 	}
 }
 
-void App::AddAppPostRenderCallback(function<void(App*)> f)
+void App::AddAppPostRenderCallback(function<bool(App*)> f)
 {
 	AddAppPostRenderCallback("Default", f);
 }
 
-void App::AddAppPostRenderCallback(const string& name, function<void(App*)> f)
+void App::AddAppPostRenderCallback(const string& name, function<bool(App*)> f)
 {
 	if (0 != appPostRenderCallbacks.count(name))
 	{
@@ -207,12 +207,12 @@ void App::RemoveAppPostRenderCallback(const string& name)
 	}
 }
 
-void App::AddKeyPressCallback(function<void(App*)> f)
+void App::AddKeyPressCallback(function<bool(App*)> f)
 {
 	AddKeyPressCallback("Default", f);
 }
 
-void App::AddKeyPressCallback(const string& name, function<void(App*)> f)
+void App::AddKeyPressCallback(const string& name, function<bool(App*)> f)
 {
 	if (0 != keyPressCallbacks.count(name))
 	{
@@ -234,12 +234,12 @@ void App::RemoveKeyPressCallback(const string& name)
 	}
 }
 
-void App::AddMouseButtonPressCallback(function<void(App*, int)> f)
+void App::AddMouseButtonPressCallback(function<bool(App*, int)> f)
 {
 	AddMouseButtonPressCallback("Default", f);
 }
 
-void App::AddMouseButtonPressCallback(const string& name, function<void(App*, int)> f)
+void App::AddMouseButtonPressCallback(const string& name, function<bool(App*, int)> f)
 {
 	if (0 != mouseButtonPressCallbacks.count(name))
 	{
@@ -261,12 +261,12 @@ void App::RemoveMouseButtonPressCallback(const string& name)
 	}
 }
 
-void App::AddMouseButtonReleaseCallback(function<void(App*, int)> f)
+void App::AddMouseButtonReleaseCallback(function<bool(App*, int)> f)
 {
 	AddMouseButtonReleaseCallback("Default", f);
 }
 
-void App::AddMouseButtonReleaseCallback(const string& name, function<void(App*, int)> f)
+void App::AddMouseButtonReleaseCallback(const string& name, function<bool(App*, int)> f)
 {
 	if (0 != mouseButtonReleaseCallbacks.count(name))
 	{
@@ -288,12 +288,12 @@ void App::RemoveMouseButtonReleaseCallback(const string& name)
 	}
 }
 
-void App::AddMouseMoveCallback(function<void(App*, int, int, int, int, bool, bool, bool)> f)
+void App::AddMouseMoveCallback(function<bool(App*, int, int, int, int, bool, bool, bool)> f)
 {
 	AddMouseMoveCallback("Default", f);
 }
 
-void App::AddMouseMoveCallback(const string& name, function<void(App*, int, int, int, int, bool, bool, bool)> f)
+void App::AddMouseMoveCallback(const string& name, function<bool(App*, int, int, int, int, bool, bool, bool)> f)
 {
 	if (0 != mouseMoveCallbacks.count(name))
 	{
@@ -315,13 +315,40 @@ void App::RemoveMouseMoveCallback(const string& name)
 	}
 }
 
+void App::AddMouseWheelScrollCallback(function<bool(App*, bool)> f)
+{
+	AddMouseWheelScrollCallback("Default", f);
+}
+
+void App::AddMouseWheelScrollCallback(const string& name, function<bool(App*, bool)> f)
+{
+	if (0 != mouseWheelScrollCallbacks.count(name))
+	{
+		printf("[Error] same name callback exists!");
+	}
+	mouseWheelScrollCallbacks[name] = f;
+}
+
+void App::RemoveMouseWheelScrollCallback()
+{
+	RemoveMouseWheelScrollCallback("Default");
+}
+
+void App::RemoveMouseWheelScrollCallback(const string& name)
+{
+	if (0 != mouseWheelScrollCallbacks.count(name))
+	{
+		mouseWheelScrollCallbacks.erase(name);
+	}
+}
+
 #ifdef _WINDOWS
-void App::AddUSBEventCallback(function<void(App*, USBEvent)> f)
+void App::AddUSBEventCallback(function<bool(App*, USBEvent)> f)
 {
 	AddUSBEventCallback("Default", f);
 }
 
-void App::AddUSBEventCallback(const string& name, function<void(App*, USBEvent)> f)
+void App::AddUSBEventCallback(const string& name, function<bool(App*, USBEvent)> f)
 {
 	if (0 != usbEventCallbacks.count(name))
 	{
@@ -382,52 +409,83 @@ void App::OnPostRender()
 	}
 }
 
-void App::OnKeyPress()
+bool App::OnKeyPress()
 {
+	bool propagateEvent = true;
+
 	for (auto& instance : s_instances)
 	{
 		for (auto& kvp : instance->keyPressCallbacks)
 		{
-			kvp.second(instance);
+			propagateEvent &= kvp.second(instance);
 		}
 	}
+
+	return propagateEvent;
 }
 
-void App::OnMouseButtonPress(int button)
+bool App::OnMouseButtonPress(int button)
 {
+	bool propagateEvent = true;
+
 	for (auto& instance : s_instances)
 	{
 		for (auto& kvp : instance->mouseButtonPressCallbacks)
 		{
-			kvp.second(instance, button);
+			propagateEvent &= kvp.second(instance, button);
 		}
 	}
+
+	return propagateEvent;
 }
 
-void App::OnMouseButtonRelease(int button)
+bool App::OnMouseButtonRelease(int button)
 {
+	bool propagateEvent = true;
+
 	for (auto& instance : s_instances)
 	{
 		for (auto& kvp : instance->mouseButtonReleaseCallbacks)
 		{
-			kvp.second(instance, button);
+			propagateEvent &= kvp.second(instance, button);
 		}
 	}
+
+	return propagateEvent;
 }
 
-void App::OnMouseMove(int posx, int posy, int lastx, int lasty, bool lButton, bool mButton, bool rButton)
+bool App::OnMouseMove(int posx, int posy, int lastx, int lasty, bool lButton, bool mButton, bool rButton)
 {
+	bool propagateEvent = true;
+
 	for (auto& instance : s_instances)
 	{
 		for (auto& kvp : instance->mouseMoveCallbacks)
 		{
-			kvp.second(instance, posx, posy, lastx, lasty, lButton, mButton, rButton);
+			propagateEvent &= kvp.second(instance, posx, posy, lastx, lasty, lButton, mButton, rButton);
 		}
 	}
+
+	return propagateEvent;
+}
+
+bool App::OnMouseWheelScroll(bool direction)
+{
+	bool propagateEvent = true;
+
+	for (auto& instance : s_instances)
+	{
+		for (auto& kvp : instance->mouseWheelScrollCallbacks)
+		{
+			propagateEvent &= kvp.second(instance, direction);
+		}
+	}
+
+	return propagateEvent;
 }
 
 #ifdef _WINDOWS
-void App::OnUSBEvent(USBEvent usbEvent)
+bool App::OnUSBEvent(USBEvent usbEvent)
 {
 	for (auto& instance : s_instances)
 	{
@@ -440,6 +498,8 @@ void App::OnUSBEvent(USBEvent usbEvent)
 			lock.unlock();
 		}
 	}
+
+	return true;
 }
 #endif
 
