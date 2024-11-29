@@ -121,30 +121,31 @@ namespace CUDA
 			{
 			}
 
-			__device__ uint64_t GetMortonCode(const Eigen::Vector3f& position) {
-				// Normalize position to range [0, 1] using the bounding box
-				Eigen::Vector3f relativePos = (position - min).cwiseQuotient(max - min);
-				relativePos.x() = fminf(fmaxf(relativePos.x(), 0.0f), 1.0f);
-				relativePos.y() = fminf(fmaxf(relativePos.y(), 0.0f), 1.0f);
-				relativePos.z() = fminf(fmaxf(relativePos.z(), 0.0f), 1.0f);
+			__device__
+				uint64_t GetMortonCode(const Eigen::Vector3f& position) {
+				// Validate and compute range
+				Eigen::Vector3f range = max - min;
+				range = range.cwiseMax(Eigen::Vector3f::Constant(1e-6f)); // Avoid zero range
 
-				// To improve precision, scale up the result to the range of the Morton grid size
-				uint32_t maxCoordinateValue = (1 << maxDepth) - 1;
-				uint32_t x = static_cast<uint32_t>(relativePos.x() * maxCoordinateValue);
-				uint32_t y = static_cast<uint32_t>(relativePos.y() * maxCoordinateValue);
-				uint32_t z = static_cast<uint32_t>(relativePos.z() * maxCoordinateValue);
+				// Normalize position
+				Eigen::Vector3f relativePos = (position - min).cwiseQuotient(range);
 
-				// Interleave bits of x, y, z to generate the Morton code
+				// Clamp to [0, 1]
+				relativePos = relativePos.cwiseMax(0.0f).cwiseMin(1.0f);
+
+				// Scale to Morton grid size
+				uint32_t maxCoordinateValue = (1 << maxDepth) - 1; // maxCoordinateValue = 1 for maxDepth = 1
+				uint32_t x = static_cast<uint32_t>(roundf(relativePos.x() * maxCoordinateValue * 1000)) / 1000;
+				uint32_t y = static_cast<uint32_t>(roundf(relativePos.y() * maxCoordinateValue * 1000)) / 1000;
+				uint32_t z = static_cast<uint32_t>(roundf(relativePos.z() * maxCoordinateValue * 1000)) / 1000;
+
+				// Compute Morton code
 				uint64_t mortonCode = 0;
 				for (int i = 0; i < maxDepth; ++i) {
 					mortonCode |= ((x >> i) & 1ULL) << (3 * i);
 					mortonCode |= ((y >> i) & 1ULL) << (3 * i + 1);
 					mortonCode |= ((z >> i) & 1ULL) << (3 * i + 2);
 				}
-
-				// Debug print for Morton code
-				printf("Position: (%f, %f, %f), Relative Position: (%f, %f, %f), Morton Code: %llu\n",
-					position.x(), position.y(), position.z(), relativePos.x(), relativePos.y(), relativePos.z(), mortonCode);
 
 				return mortonCode;
 			}
@@ -194,6 +195,7 @@ namespace CUDA
 
 							current->children[childIndex] = newChild;
 
+							printBinary(newChild->mortonCode);
 							printf("Allocated child octant at depth %d, Morton Code: %llu, Index: %d\n",
 								level + 1, newChild->mortonCode, childIndex);
 						}
@@ -369,26 +371,13 @@ namespace CUDA
 		return min + Eigen::Vector3f(x, y, z).cwiseProduct(voxelSize) + (voxelSize * 0.5f);
 	}
 
-
-	// Voxel 크기 계산
 	Eigen::Vector3f CalculateVoxelSizeFromMortonCode(uint64_t mortonCode, int depth, const Eigen::Vector3f& min, const Eigen::Vector3f& max)
 	{
-		// Step 1: 경계 박스의 전체 길이 계산
 		Eigen::Vector3f span = max - min;
-
-		// Step 2: 주어진 깊이에 따른 세분화 수 계산
-		// 각 축은 2^depth 만큼 나뉨
 		float subdivisions = static_cast<float>(1 << depth); // 2^depth
-
-		// Step 3: 각 축에 대한 Voxel 크기 계산
 		Eigen::Vector3f voxelSize = span / subdivisions;
-
-		// Voxel 크기 출력
-		////////////////////////////////////////////////////////////std::cout << "Voxel Size (x, y, z): " << voxelSize.transpose() << std::endl;
-
-		return voxelSize; // x, y, z 방향의 Voxel 크기를 벡터로 반환
+		return voxelSize;
 	}
-
 
 	template<typename T>
 	__global__ void Kernel_Insert(Octree<T>::Internal* octree, PatchBuffers patchBuffers) {
@@ -409,9 +398,6 @@ namespace CUDA
 
 		// Get Morton code for the perturbed point
 		auto mortonCode = octree->GetMortonCode(p);
-
-		// Print Morton code to verify uniqueness
-		printf("Thread %u: Point (%f, %f, %f), Morton Code: %llu\n", threadid, p.x(), p.y(), p.z(), mortonCode);
 
 		auto node = octree->AllocateOctantsUsingMortonCode(mortonCode);
 		if (node != nullptr) {
@@ -440,66 +426,66 @@ namespace CUDA
 		//octree.Initialize(Eigen::Vector3f(-25.0f, -25.0f, -25.0f), Eigen::Vector3f(25.0f, 25.0f, 25.0f), 15000000);
 		//octree.Initialize(Eigen::Vector3f(-50.0f, -50.0f, -50.0f), Eigen::Vector3f(50.0f, 50.0f, 50.0f), 150000000);
 		//octree.Initialize(1, Eigen::Vector3f(-100.0f, -100.0f, -100.0f), Eigen::Vector3f(100.0f, 100.0f, 100.0f), 15000000);
-		octree.Initialize(1, Eigen::Vector3f(-100.0f, -100.0f, -100.0f), Eigen::Vector3f(100.0f, 100.0f, 100.0f), 50);
+		octree.Initialize(2, Eigen::Vector3f(-100.0f, -100.0f, -100.0f), Eigen::Vector3f(100.0f, 100.0f, 100.0f), 50);
 
 		t = Time::End(t, "Octants allocation");
 
 		//PatchBuffers patchBuffers;
 
-		//for (size_t i = 0; i < 2; i++)
-		////for (size_t i = 0; i < 4252; i++)
-		//{
-		//	t = Time::Now();
+//for (size_t i = 0; i < 2; i++)
+////for (size_t i = 0; i < 4252; i++)
+//{
+//	t = Time::Now();
 
-		//	stringstream ss;
-		//	ss << "C:\\Resources\\2D\\Captured\\PointCloud\\point_" << i << ".ply";
+//	stringstream ss;
+//	ss << "C:\\Resources\\2D\\Captured\\PointCloud\\point_" << i << ".ply";
 
-		//	PLYFormat ply;
-		//	ply.Deserialize(ss.str());
+//	PLYFormat ply;
+//	ply.Deserialize(ss.str());
 
-		//	t = Time::End(t, "Load ply");
+//	t = Time::End(t, "Load ply");
 
-		//	patchBuffers.FromPLYFile(ply);
+//	patchBuffers.FromPLYFile(ply);
 
-		//	t = Time::End(t, "Copy data to device");
+//	t = Time::End(t, "Copy data to device");
 
-		//	nvtxRangePushA("Insert");
+//	nvtxRangePushA("Insert");
 
-		//	octree.Insert(patchBuffers);
+//	octree.Insert(patchBuffers);
 
-		//	nvtxRangePop();
+//	nvtxRangePop();
 
-		//	t = Time::End(t, "Insert using PatchBuffers");
-		//}
+//	t = Time::End(t, "Insert using PatchBuffers");
+//}
 
-		/*
-		{
-			t = Time::Now();
+/*
+{
+	t = Time::Now();
 
-			stringstream ss;
-			ss << "C:\\Resources\\3D\\PLY\\Complete\\Lower_pointcloud.ply";
+	stringstream ss;
+	ss << "C:\\Resources\\3D\\PLY\\Complete\\Lower_pointcloud.ply";
 
-			PLYFormat ply;
-			ply.Deserialize(ss.str());
-			cout << "ply min : " << ply.GetAABB().min().transpose() << endl;
-			cout << "ply max : " << ply.GetAABB().max().transpose() << endl;
+	PLYFormat ply;
+	ply.Deserialize(ss.str());
+	cout << "ply min : " << ply.GetAABB().min().transpose() << endl;
+	cout << "ply max : " << ply.GetAABB().max().transpose() << endl;
 
-			t = Time::End(t, "Load ply");
+	t = Time::End(t, "Load ply");
 
-			PatchBuffers patchBuffers(ply.GetPoints().size() / 3, 1);
-			patchBuffers.FromPLYFile(ply);
+	PatchBuffers patchBuffers(ply.GetPoints().size() / 3, 1);
+	patchBuffers.FromPLYFile(ply);
 
-			t = Time::End(t, "Copy data to device");
+	t = Time::End(t, "Copy data to device");
 
-			nvtxRangePushA("Insert");
+	nvtxRangePushA("Insert");
 
-			octree.Insert(patchBuffers);
+	octree.Insert(patchBuffers);
 
-			nvtxRangePop();
+	nvtxRangePop();
 
-			t = Time::End(t, "Insert using PatchBuffers");
-		}
-		*/
+	t = Time::End(t, "Insert using PatchBuffers");
+}
+*/
 
 		{
 			t = Time::Now();
@@ -536,7 +522,7 @@ namespace CUDA
 
 			for (int i = 0; i < 8; ++i) {
 				std::cout << "Host point[" << i << "]: " << patchBuffers.inputPoints[i].transpose() << std::endl;
-				VD::AddSphere("center", patchBuffers.inputPoints[i], { 1.0f, 1.0f, 1.0f }, {0.0f, 0.0f, 1.0f}, Color4::Red);
+				VD::AddSphere("center", patchBuffers.inputPoints[i], { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 1.0f }, Color4::Red);
 			}
 
 			cudaDeviceSynchronize();
@@ -549,7 +535,6 @@ namespace CUDA
 
 			t = Time::End(t, "Insert using PatchBuffers");
 		}
-
 
 		t = Time::Now();
 		
@@ -570,13 +555,17 @@ namespace CUDA
 			auto p = CalculatePositionFromMortonCode(current->mortonCode, current->depth, octree.internal->min, octree.internal->max);
 			auto voxelSize = CalculateVoxelSizeFromMortonCode(current->mortonCode, current->depth, octree.internal->min, octree.internal->max);
 			cout << "Depth : " << current->depth << endl;
-			cout << "Morton Code : " << current->mortonCode << endl;
+			//cout << "Morton Code : " << current->mortonCode << endl;
+			printBinary(current->mortonCode);
 			cout << "Position : " << p.transpose() << endl;
 			cout << "VoxelSize : " << voxelSize.transpose() << endl;
 
-			stringstream ss;
-			ss << "cube_" << current->depth;
-			VD::AddCube(ss.str(), p, voxelSize * 0.5f, { 0.0f, 0.0f, 1.0f }, Color4::White);
+			if (0 < current->depth)
+			{
+				stringstream ss;
+				ss << "cube_" << current->depth;
+				VD::AddCube(ss.str(), p, voxelSize * 0.5f, { 0.0f, 0.0f, 1.0f }, Color4::White);
+			}
 
 			printf("----------------------------------------------------------------------------------------------------\n");
 
