@@ -15,6 +15,7 @@ int main()
 
 	App app;
 	app.AddKeyPressCallback(OnKeyPress);
+	app.AddKeyReleaseCallback(OnKeyRelease);
 	app.AddMouseButtonPressCallback(OnMouseButtonPress);
 	app.AddMouseButtonReleaseCallback(OnMouseButtonRelease);
 	app.AddMouseMoveCallback(OnMouseMove);

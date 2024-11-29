@@ -95,6 +95,11 @@ public:
     void RemoveKeyPressCallback();
     void RemoveKeyPressCallback(const string& name);
 
+    void AddKeyReleaseCallback(function<bool(App*)> f);
+    void AddKeyReleaseCallback(const string& name, function<bool(App*)> f);
+    void RemoveKeyReleaseCallback();
+    void RemoveKeyReleaseCallback(const string& name);
+
     void AddMouseButtonPressCallback(function<bool(App*, int)> f);
     void AddMouseButtonPressCallback(const string& name, function<bool(App*, int)> f);
     void RemoveMouseButtonPressCallback();
@@ -129,6 +134,7 @@ public:
     void CaptureAsPointCloud(const string& saveDirectory);
 
     static bool OnKeyPress();
+    static bool OnKeyRelease();
     static bool OnMouseButtonPress(int button);
     static bool OnMouseButtonRelease(int button);
     static bool OnMouseMove(int posx, int posy, int lastx, int lasty, bool lButton, bool mButton, bool rButton);
@@ -143,8 +149,9 @@ public:
 
     inline AppConfiguration* Configuration() { return &configuration; }
 
-    inline map<string, bool> GetKeyStates() { return keyStates; }
+    //inline map<string, bool> GetKeyStates() { return keyStates; }
     inline bool GetKeyState(string key) { return keyStates[key]; }
+    inline void SetKeyState(string key, bool pressed) { keyStates[key] = pressed; }
 
     map<string, void*> registry;
 
@@ -166,6 +173,7 @@ private:
     map<string, function<bool(App*)>> appUpdateCallbacks;
     map<string, function<bool(App*)>> appPostRenderCallbacks;
     map<string, function<bool(App*)>> keyPressCallbacks;
+    map<string, function<bool(App*)>> keyReleaseCallbacks;
     map<string, function<bool(App*, int)>> mouseButtonPressCallbacks;
     map<string, function<bool(App*, int)>> mouseButtonReleaseCallbacks;
     map<string, function<bool(App*, int, int, int, int, bool, bool, bool)>> mouseMoveCallbacks;

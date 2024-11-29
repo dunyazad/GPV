@@ -334,6 +334,7 @@ void MoveCamera(App* pApp, vtkCamera* camera, const Eigen::Matrix4f& tm)
 	pApp->GetRenderer()->ResetCameraClippingRange();
 	pApp->GetRenderWindow()->Render();
 
+	printf("MoveCamera\n");
 }
 
 void CaptureNextFrame(App* pApp)
@@ -482,6 +483,8 @@ bool AppStartCallback_Capture(App* pApp)
 	//VisualDebugging::AddLine("axes", { 0, 0, 0 }, { 0.0f, 0.0f, 100.0f }, Color4::Blue);
 
 	enabledToCapture = true;
+
+	return true;
 }
 //
 //struct Point

@@ -22,10 +22,11 @@ public:
     virtual void OnRightButtonUp() override;
     void HandleBothButtons();
 
-    void OnKeyPress() override;
-    void OnMouseMove() override;
-    void OnMouseWheelForward() override;
-    void OnMouseWheelBackward() override;
+    virtual void OnKeyPress() override;
+    virtual void OnKeyRelease() override;
+    virtual void OnMouseMove() override;
+    virtual void OnMouseWheelForward() override;
+    virtual void OnMouseWheelBackward() override;
 
     inline void SetApp(App* app) { this->app = app; }
 

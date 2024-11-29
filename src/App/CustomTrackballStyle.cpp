@@ -107,7 +107,7 @@ void CustomTrackballStyle::HandleBothButtons()
 void CustomTrackballStyle::OnKeyPress()
 {
     std::string key = this->GetInteractor()->GetKeySym();
-    std::cout << "Key pressed: " << key << std::endl;
+    //std::cout << "Key pressed: " << key << std::endl;
 
     bool propagateEvent = true;
     propagateEvent = app->OnKeyPress();
@@ -115,6 +115,20 @@ void CustomTrackballStyle::OnKeyPress()
     if (propagateEvent)
     {
         vtkInteractorStyleTrackballCamera::OnKeyPress();
+    }
+}
+
+void CustomTrackballStyle::OnKeyRelease()
+{
+    std::string key = this->GetInteractor()->GetKeySym();
+    //std::cout << "Key Releaseed: " << key << std::endl;
+
+    bool propagateEvent = true;
+    propagateEvent = app->OnKeyRelease();
+
+    if (propagateEvent)
+    {
+        vtkInteractorStyleTrackballCamera::OnKeyRelease();
     }
 }
 
@@ -135,8 +149,6 @@ void CustomTrackballStyle::OnMouseWheelForward()
 
     if (propagateEvent)
     {
-        printf("propagate mouse wheel event\n");
-
         vtkInteractorStyleTrackballCamera::OnMouseWheelForward();
     }
 }

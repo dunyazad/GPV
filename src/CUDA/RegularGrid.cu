@@ -174,7 +174,7 @@ namespace CUDA
 		regularGrid->elements[flatIndex].tsdfValue = 1.0f;
 		regularGrid->elements[flatIndex].weight = 0.0f;
 		regularGrid->elements[flatIndex].normal = make_float3(0.0f, 0.0f, 0.0f);
-		regularGrid->elements[flatIndex].color = make_float3(0.0f, 0.0f, 0.0f);
+		regularGrid->elements[flatIndex].color = make_float3(0.5f, 0.5f, 0.5f);
 	}
 
 	template<typename T>
@@ -196,21 +196,16 @@ namespace CUDA
 
 		float3 voxelCenter = GetPosition(regularGrid->center, regularGrid->dimensions, regularGrid->voxelSize, gridIndex);
 
-		// Calculate signed distance from the point to the voxel center
 		float distance = length(p - voxelCenter);
-		float signedDistance = distance;  // Correct calculation, positive or negative based on surface
+		float signedDistance = distance;
 
-		// Normalize signed distance by truncation distance and clamp to range [-1, 1]
 		float tsdfValue = signedDistance / regularGrid->truncationDistance;
 		tsdfValue = fminf(1.0f, fmaxf(-1.0f, tsdfValue));
 
-		// Use atomic operations to safely update the voxel grid
 		Voxel* voxel = &(regularGrid->elements[flatIndex]);
 
-		// Update TSDF value using a weighted average
-		float newWeight = 1.0f;  // Assume a uniform weight for each measurement for simplicity
+		float newWeight = 1.0f;
 
-		// Atomically update the TSDF value
 		float previousTsdf = voxel->tsdfValue;
 		float previousWeight = voxel->weight;
 
@@ -218,23 +213,22 @@ namespace CUDA
 		float updatedTsdf = (previousTsdf * previousWeight + tsdfValue * newWeight) / (previousWeight + newWeight);
 		float updatedWeight = previousWeight + newWeight;
 
-		// Use atomicExch to prevent race conditions while updating the TSDF and weight
 		voxel->tsdfValue = updatedTsdf;
 		voxel->weight = updatedWeight;
 
-		// Optionally update color using a similar averaging method
 		voxel->color = make_float3(
-			(voxel->color.x * previousWeight + color.x * newWeight) / updatedWeight,
-			(voxel->color.y * previousWeight + color.y * newWeight) / updatedWeight,
-			(voxel->color.z * previousWeight + color.z * newWeight) / updatedWeight
+			fminf(1.0f, fmaxf(0.0f, (voxel->color.x * previousWeight + color.x * newWeight) / updatedWeight)),
+			fminf(1.0f, fmaxf(0.0f, (voxel->color.y * previousWeight + color.y * newWeight) / updatedWeight)),
+			fminf(1.0f, fmaxf(0.0f, (voxel->color.z * previousWeight + color.z * newWeight) / updatedWeight))
 		);
 
-		// Update normal as a simple replacement; more sophisticated fusion may be used
 		voxel->normal = make_float3(
 			(voxel->normal.x * previousWeight + normal.x * newWeight) / updatedWeight,
 			(voxel->normal.y * previousWeight + normal.y * newWeight) / updatedWeight,
 			(voxel->normal.z * previousWeight + normal.z * newWeight) / updatedWeight
 		);
+
+		voxel->normal = normalize(voxel->normal);
 
 		//printf("voxel->tsdfValue : %f\n", voxel->tsdfValue);
 
@@ -362,11 +356,13 @@ namespace CUDA
 						{
 							auto p = GetPosition(rg.internal->center, rg.internal->dimensions, rg.internal->voxelSize, make_uint3(x, y, z));
 							auto n = voxel.normal;
-							n = make_float3(0.0f, 0.0f, 1.0f);
+							//n = make_float3(0.0f, 0.0f, 1.0f);
 							auto c = voxel.color;
 							Color4 c4;
 							c4.FromNormalized(c.x, c.y, c.z, 1.0f);
-							VD::AddCube("voxels", { p.x, p.y, p.z }, rg.internal->voxelSize * 0.5f, c4);
+							VD::AddCube("voxels", { p.x, p.y, p.z },
+								{ rg.internal->voxelSize * 0.5f, rg.internal->voxelSize * 0.5f,rg.internal->voxelSize * 0.5f },
+								{ n.x, n.y, n.z }, c4);
 						}
 					}
 				}

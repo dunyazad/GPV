@@ -1,5 +1,6 @@
 #include <App/App.h>
 #include <App/AppEventHandlers.h>
+#include <App/CustomTrackBallStyle.h>
 #include <Algorithm/KDTree.h>
 #include <Algorithm/Octree.hpp>
 #include <Debugging/VisualDebugging.h>
@@ -26,9 +27,9 @@ bool OnKeyPress(App* app)
 	vtkCamera* camera = renderer->GetActiveCamera();
 
 	std::string key = interactor->GetKeySym();
-	app->GetKeyStates()[key] = true;
+	app->SetKeyState(key, true);
 
-	printf("%s\n", key.c_str());
+	//printf("%s\n", key.c_str());
 
 	if (key == "r")
 	{
@@ -257,7 +258,7 @@ bool OnKeyRelease(App* app)
 	vtkCamera* camera = renderer->GetActiveCamera();
 
 	std::string key = interactor->GetKeySym();
-	app->GetKeyStates()[key] = false;
+	app->SetKeyState(key, false);
 
 	return true;
 }
@@ -623,17 +624,41 @@ bool OnMouseMove(App* app, int posx, int posy, int lastx, int lasty, bool lButto
 
 bool OnMouseWheelScroll(App* app, bool isForward)
 {
+	vtkRenderWindowInteractor* interactor = app->GetInteractor();
+	CustomTrackballStyle* interactorStyle = (CustomTrackballStyle*)interactor->GetInteractorStyle();
+	vtkRenderWindow* renderWindow = interactor->GetRenderWindow();
+	vtkRenderer* renderer = renderWindow->GetRenderers()->GetFirstRenderer();
+	vtkCamera* camera = renderer->GetActiveCamera();
+
 	if (app->GetKeyState("Control_L"))
 	{
+		// Get the current clipping range of the camera
+		double* range = camera->GetClippingRange();
+
+		// Adjust clipping range based on scroll direction
 		if (isForward)
 		{
 			printf("Forward\n");
+			range[0] *= 1.01;  // Increase near clipping plane distance
 		}
 		else
 		{
 			printf("Backward\n");
+			range[0] *= 0.99;  // Decrease near clipping plane distance
 		}
 
+		camera->SetClippingRange(range[0], range[1]);
+
+		// Set the modified clipping range back to the camera
+		//camera->SetClippingRange(range);
+
+		// You can verify the values
+		double* clippingRange = camera->GetClippingRange();
+		std::cout << "Near clipping distance: " << clippingRange[0] << std::endl;
+		std::cout << "Far clipping distance: " << clippingRange[1] << std::endl;
+
+		//renderWindow->Render();
+		
 		return false;
 	}
 

@@ -70,7 +70,7 @@ void App::Run()
 	renderer = vtkSmartPointer<vtkRenderer>::New();
 	renderer->SetBackground(0.3, 0.5, 0.7);
 
-	renderer->GetActiveCamera()->SetClippingRange(0.001, 40.0);
+	//renderer->GetActiveCamera()->SetClippingRange(0.001, 40.0);
 
 	renderWindow = vtkSmartPointer<vtkRenderWindow>::New();
 	renderWindow->SetSize(configuration.windowWidth, configuration.windowHeight);
@@ -78,6 +78,7 @@ void App::Run()
 
 	interactor = vtkSmartPointer<vtkRenderWindowInteractor>::New();
 	customTrackballStyle = vtkSmartPointer<CustomTrackballStyle>::New();
+	customTrackballStyle->SetApp(this);
 	interactor->SetInteractorStyle(customTrackballStyle);
 	interactor->SetRenderWindow(renderWindow);
 	interactor->Initialize();
@@ -231,6 +232,33 @@ void App::RemoveKeyPressCallback(const string& name)
 	if (0 != keyPressCallbacks.count(name))
 	{
 		keyPressCallbacks.erase(name);
+	}
+}
+
+void App::AddKeyReleaseCallback(function<bool(App*)> f)
+{
+	AddKeyReleaseCallback("Default", f);
+}
+
+void App::AddKeyReleaseCallback(const string& name, function<bool(App*)> f)
+{
+	if (0 != keyReleaseCallbacks.count(name))
+	{
+		printf("[Error] same name callback exists!");
+	}
+	keyReleaseCallbacks[name] = f;
+}
+
+void App::RemoveKeyReleaseCallback()
+{
+	RemoveKeyReleaseCallback("Default");
+}
+
+void App::RemoveKeyReleaseCallback(const string& name)
+{
+	if (0 != keyReleaseCallbacks.count(name))
+	{
+		keyReleaseCallbacks.erase(name);
 	}
 }
 
@@ -416,6 +444,21 @@ bool App::OnKeyPress()
 	for (auto& instance : s_instances)
 	{
 		for (auto& kvp : instance->keyPressCallbacks)
+		{
+			propagateEvent &= kvp.second(instance);
+		}
+	}
+
+	return propagateEvent;
+}
+
+bool App::OnKeyRelease()
+{
+	bool propagateEvent = true;
+
+	for (auto& instance : s_instances)
+	{
+		for (auto& kvp : instance->keyReleaseCallbacks)
 		{
 			propagateEvent &= kvp.second(instance);
 		}
