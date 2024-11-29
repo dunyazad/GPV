@@ -131,6 +131,7 @@ target_link_libraries(GPV
     ${VTK_LIBRARIES}
     ${HDIAPI_LIBRARIES}
     CUDA::cudart CUDA::cuda_driver
+    CUDA::cusolver CUDA::cusparse
 )
 
 if(MSVC)
