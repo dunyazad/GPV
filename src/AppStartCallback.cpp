@@ -17,6 +17,7 @@ using VD = VisualDebugging;
 
 #include <CUDA/CUDA.cuh>
 #include <CUDA/Octree.cuh>
+#include <CUDA/RegularGrid.cuh>
 
 int pid = 0;
 size_t size_0 = 0;
@@ -2135,6 +2136,17 @@ void AppStartCallback_TestOctree(App* pApp)
 	CUDA::TestOctree();
 }
 
+void AppStartCallback_TestRegularGrid(App* pApp)
+{
+	VisualDebugging::AddLine("axes", { 0, 0, 0 }, { 100 * 0.5f, 0.0f, 0.0f }, Color4::Red);
+	VisualDebugging::AddLine("axes", { 0, 0, 0 }, { 0.0f, 100 * 0.5f, 0.0f }, Color4::Green);
+	VisualDebugging::AddLine("axes", { 0, 0, 0 }, { 0.0f, 0.0f, 100 * 0.5f }, Color4::Blue);
+
+	//LoadModel(pApp->GetRenderer(), "C:\\Resources\\3D\\PLY\\Complete\\Lower.ply");
+
+	CUDA::TestRegularGrid();
+}
+
 void AppStartCallback(App* pApp)
 {
 	//AppStartCallback_Integrate(pApp);
@@ -2146,5 +2158,6 @@ void AppStartCallback(App* pApp)
 	//AppStartCallback_NanoVDB(pApp);
 	//AppStartCallback_Simple(pApp);
 
-	AppStartCallback_TestOctree(pApp);
+	//AppStartCallback_TestOctree(pApp);
+	AppStartCallback_TestRegularGrid(pApp);
 }

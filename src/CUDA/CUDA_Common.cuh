@@ -1,6 +1,7 @@
 #pragma once
 
 #include <assert.h>
+#include <cmath>
 #include <stdio.h>
 #include <iostream>
 #include <stack>
@@ -73,12 +74,100 @@ inline void __printLastCudaError(const char* errorMessage, const char* file,
             cudaGetErrorString(err));
     }
 }
+//
+//// CUDA error check macro
+//#define cudaCheckError() { \
+//    cudaError_t e = cudaGetLastError(); \
+//    if (e != cudaSuccess) { \
+//        std::cerr << "CUDA Error: " << cudaGetErrorString(e) << "\n"; \
+//        exit(1); \
+//    } \
+//}
 
-// CUDA error check macro
-#define cudaCheckError() { \
-    cudaError_t e = cudaGetLastError(); \
-    if (e != cudaSuccess) { \
-        std::cerr << "CUDA Error: " << cudaGetErrorString(e) << "\n"; \
-        exit(1); \
-    } \
+
+__host__ __device__
+inline float3 operator+(const float3& a, const float3& b) {
+    return make_float3(a.x + b.x, a.y + b.y, a.z + b.z);
+}
+
+__host__ __device__
+inline float3& operator+=(float3& a, const float3& b) {
+    a.x += b.x;
+    a.y += b.y;
+    a.z += b.z;
+    return a;
+}
+
+__host__ __device__
+inline float3 operator-(const float3& a, const float3& b) {
+    return make_float3(a.x - b.x, a.y - b.y, a.z - b.z);
+}
+
+__host__ __device__
+inline float3& operator-=(float3& a, const float3& b) {
+    a.x -= b.x;
+    a.y -= b.y;
+    a.z -= b.z;
+    return a;
+}
+
+__host__ __device__
+inline float3 operator*(const float3& a, float scalar) {
+    return make_float3(a.x * scalar, a.y * scalar, a.z * scalar);
+}
+
+__host__ __device__
+inline float3 operator*(float scalar, const float3& a) {
+    return make_float3(a.x * scalar, a.y * scalar, a.z * scalar);
+}
+
+__host__ __device__
+inline float3& operator*=(float3& a, float scalar) {
+    a.x *= scalar;
+    a.y *= scalar;
+    a.z *= scalar;
+    return a;
+}
+
+__host__ __device__
+inline float3 operator/(const float3& a, float scalar) {
+    return make_float3(a.x / scalar, a.y / scalar, a.z / scalar);
+}
+
+__host__ __device__
+inline float3& operator/=(float3& a, float scalar) {
+    a.x /= scalar;
+    a.y /= scalar;
+    a.z /= scalar;
+    return a;
+}
+
+__host__ __device__
+inline float length(const float3& a) {
+    return sqrtf(a.x * a.x + a.y * a.y + a.z * a.z);
+}
+
+__host__ __device__
+inline float dot(const float3& a, const float3& b) {
+    return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+
+__host__ __device__
+inline float3 cross(const float3& a, const float3& b) {
+    return make_float3(
+        a.y * b.z - a.z * b.y,
+        a.z * b.x - a.x * b.z,
+        a.x * b.y - a.y * b.x
+    );
+}
+
+__host__ __device__
+inline float3 normalize(const float3& a) {
+    float len = length(a);
+    if (len > 0.0f) {
+        return a / len;
+    }
+    else {
+        return make_float3(0.0f, 0.0f, 0.0f);
+    }
 }

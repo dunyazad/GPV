@@ -47,6 +47,8 @@ set(cuda_source_list
     src/CUDA/CUDA.cu
     src/CUDA/Octree.cuh
     src/CUDA/Octree.cu
+    src/CUDA/RegularGrid.cuh
+    src/CUDA/RegularGrid.cu
 )
 
 set(source_list

@@ -241,45 +241,6 @@ namespace CUDA
 		cudaDeviceSynchronize();
 	}
 
-	// Helper device function to add two float3 vectors
-	__device__ float3 operator+(const float3& a, const float3& b) {
-		return { a.x + b.x, a.y + b.y, a.z + b.z };
-	}
-
-	// Helper device function to add two float3 vectors
-	__device__ float3 operator+=(float3& a, float3& b) {
-		a.x += b.x;
-		a.y += b.y;
-		a.z += b.z;
-		return { a.x + b.x, a.y + b.y, a.z + b.z };
-	}
-
-	// Helper device function to divide a float3 vector by a scalar
-	__device__ float3 operator/(const float3& a, float b) {
-		return { a.x / b, a.y / b, a.z / b };
-	}
-
-	// Helper device function to divide a float3 vector by a scalar
-	__device__ float3 operator/=(float3& a, float b) {
-		a.x /= b;
-		a.y /= b;
-		a.z /= b;
-		return { a.x / b, a.y / b, a.z / b };
-	}
-
-	// Helper device function to calculate the cross product of two vectors
-	__device__ float3 crossProduct(const float3& a, const float3& b) {
-		return { a.y * b.z - a.z * b.y,
-				a.z * b.x - a.x * b.z,
-				a.x * b.y - a.y * b.x };
-	}
-
-	// Helper device function to normalize a float3 vector
-	__device__ float3 normalize(const float3& v) {
-		float len = sqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
-		return len > 0 ? float3{ v.x / len, v.y / len, v.z / len } : float3{ 0, 0, 1 };
-	}
-
 	__device__ float3 getNormalFromCovariance(const float* covarianceMatrix) {
 		// Extract elements of the 3x3 covariance matrix
 		float Cxx = covarianceMatrix[0];
@@ -296,7 +257,7 @@ namespace CUDA
 		float3 v2 = { Cxy, Cyy, Cyz };
 
 		// The normal vector is the cross product of v1 and v2
-		float3 normal = crossProduct(v1, v2);
+		float3 normal = cross(v1, v2);
 
 		// Normalize the resulting vector
 		return normalize(normal);
