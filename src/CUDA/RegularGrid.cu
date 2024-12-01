@@ -76,6 +76,9 @@ namespace CUDA
 	template<typename T>
 	__global__ void Kernel_Integrate(RegularGrid<T>::Internal* regularGrid, PatchBuffers);
 
+	template<typename T>
+	__global__ void Kernel_SmoothTSDF(RegularGrid<T>::Internal* regularGrid, T* smoothedElements);
+
 	__host__ __device__
 		uint3 GetIndex(const float3& gridCenter, uint3 gridDimensions, float voxelSize, const float3& position);
 
@@ -153,6 +156,32 @@ namespace CUDA
 			nvtxRangePop();
 		}
 
+		// Function to launch the smoothing kernel and apply smoothing to the entire TSDF grid
+		void SmoothTSDF()
+		{
+			// Allocate buffer for smoothed elements
+			T* smoothedElements;
+			checkCudaErrors(cudaMallocManaged(&smoothedElements, sizeof(T) * internal->numberOfVoxels));
+
+			// Set up the CUDA kernel launch parameters
+			dim3 threadsPerBlock(8, 8, 8); // You can optimize these values
+			dim3 blocksPerGrid(
+				(internal->dimensions.x + threadsPerBlock.x - 1) / threadsPerBlock.x,
+				(internal->dimensions.y + threadsPerBlock.y - 1) / threadsPerBlock.y,
+				(internal->dimensions.z + threadsPerBlock.z - 1) / threadsPerBlock.z
+			);
+
+			// Launch the smoothing kernel
+			Kernel_SmoothTSDF<T> << <blocksPerGrid, threadsPerBlock >> > (internal, smoothedElements);
+			checkCudaErrors(cudaDeviceSynchronize());
+
+			// Copy the smoothed values back to the original TSDF grid
+			cudaMemcpy(internal->elements, smoothedElements, sizeof(T) * internal->numberOfVoxels, cudaMemcpyDeviceToDevice);
+
+			// Free the temporary smoothed elements buffer
+			checkCudaErrors(cudaFree(smoothedElements));
+		}
+
 		// 메시 추출 함수 추가
 		std::vector<Vertex> ExtractMesh()
 		{
@@ -167,6 +196,7 @@ namespace CUDA
 						// 현재 그리드 셀의 8개 코너 정점 TSDF 값 가져오기
 						std::array<float, 8> tsdfValues;
 						std::array<float3, 8> positions;
+						std::array<float3, 8> normals;
 
 						for (int i = 0; i < 8; ++i)
 						{
@@ -178,6 +208,7 @@ namespace CUDA
 
 							tsdfValues[i] = internal->elements[flatIndex].tsdfValue;
 							positions[i] = GetPosition(internal->center, internal->dimensions, internal->voxelSize, cornerIndex);
+							normals[i] = internal->elements[flatIndex].normal;
 						}
 
 						// Marching Cubes 알고리즘을 위한 인덱스 계산
@@ -206,6 +237,29 @@ namespace CUDA
 							Vertex vertexA = interpolateVertex(edgeA, positions, tsdfValues);
 							Vertex vertexB = interpolateVertex(edgeB, positions, tsdfValues);
 							Vertex vertexC = interpolateVertex(edgeC, positions, tsdfValues);
+
+							// 삼각형의 노말 계산
+							float3 edge1 = make_float3(vertexB.position.x - vertexA.position.x,
+								vertexB.position.y - vertexA.position.y,
+								vertexB.position.z - vertexA.position.z);
+							float3 edge2 = make_float3(vertexC.position.x - vertexA.position.x,
+								vertexC.position.y - vertexA.position.y,
+								vertexC.position.z - vertexA.position.z);
+							float3 triangleNormal = normalize(cross(edge1, edge2));
+
+							//// 삼각형 노말과 복셀 노말이 반대 방향이면 삼각형 생성을 건너뜀
+							//float3 voxelNormal = normals[edgeA];
+							//if (dot(triangleNormal, voxelNormal) < 0)
+							//{
+							//	continue;
+							//}
+
+							//// 삼각형이 내부 방향으로 생성되지 않도록 TSDF 값을 사용하여 확인
+							//if (tsdfValues[edgeA] < 0 && tsdfValues[edgeB] < 0 && tsdfValues[edgeC] < 0)
+							//{
+							//	// 모든 정점이 내부에 있는 경우, 삼각형을 생성하지 않음
+							//	continue;
+							//}
 
 							meshVertices.push_back(vertexA);
 							meshVertices.push_back(vertexB);
@@ -883,6 +937,91 @@ namespace CUDA
 		//}
 	}
 
+	template<typename T>
+	__global__ void Kernel_SmoothTSDF(RegularGrid<T>::Internal* regularGrid, T* smoothedElements)
+	{
+		// Calculate thread coordinates
+		size_t threadX = blockIdx.x * blockDim.x + threadIdx.x;
+		size_t threadY = blockIdx.y * blockDim.y + threadIdx.y;
+		size_t threadZ = blockIdx.z * blockDim.z + threadIdx.z;
+
+		if (threadX >= regularGrid->dimensions.x ||
+			threadY >= regularGrid->dimensions.y ||
+			threadZ >= regularGrid->dimensions.z) return;
+
+		// Current flat index for the voxel
+		size_t flatIndex = GetFlatIndex(make_uint3(threadX, threadY, threadZ), regularGrid->dimensions);
+
+		// Initialize smoothing variables
+		float tsdfSum = 0.0f;
+		float weightSum = 0.0f;
+		float3 colorSum = make_float3(0.0f, 0.0f, 0.0f);
+		float3 normalSum = make_float3(0.0f, 0.0f, 0.0f);
+		int count = 0;
+
+		// Define smoothing radius (e.g., 1 for a simple box filter)
+		const int radius = 1;
+
+		// Iterate over the neighboring voxels within the smoothing radius
+		for (int zOffset = -radius; zOffset <= radius; ++zOffset)
+		{
+			for (int yOffset = -radius; yOffset <= radius; ++yOffset)
+			{
+				for (int xOffset = -radius; xOffset <= radius; ++xOffset)
+				{
+					int neighborX = threadX + xOffset;
+					int neighborY = threadY + yOffset;
+					int neighborZ = threadZ + zOffset;
+
+					// Skip out-of-bounds neighbors
+					if (neighborX < 0 || neighborX >= regularGrid->dimensions.x ||
+						neighborY < 0 || neighborY >= regularGrid->dimensions.y ||
+						neighborZ < 0 || neighborZ >= regularGrid->dimensions.z)
+					{
+						continue;
+					}
+
+					// Get the neighbor index
+					uint3 neighborIndex = make_uint3(neighborX, neighborY, neighborZ);
+					size_t neighborFlatIndex = GetFlatIndex(neighborIndex, regularGrid->dimensions);
+
+					// Fetch the neighbor voxel
+					Voxel neighborVoxel = regularGrid->elements[neighborFlatIndex];
+
+					// Accumulate TSDF values, weights, and colors
+					tsdfSum += neighborVoxel.tsdfValue * neighborVoxel.weight;
+					weightSum += neighborVoxel.weight;
+					colorSum.x += neighborVoxel.color.x * neighborVoxel.weight;
+					colorSum.y += neighborVoxel.color.y * neighborVoxel.weight;
+					colorSum.z += neighborVoxel.color.z * neighborVoxel.weight;
+					normalSum += neighborVoxel.normal;
+
+					++count;
+				}
+			}
+		}
+
+		// Calculate smoothed values for the current voxel
+		Voxel smoothedVoxel;
+		if (weightSum > 0.0f)
+		{
+			smoothedVoxel.tsdfValue = tsdfSum / weightSum;
+			smoothedVoxel.weight = weightSum / count; // Normalizing by number of neighbors considered
+			smoothedVoxel.color = make_float3(colorSum.x / weightSum, colorSum.y / weightSum, colorSum.z / weightSum);
+		}
+		else
+		{
+			// If there was no effective weight, keep the original value
+			smoothedVoxel.tsdfValue = regularGrid->elements[flatIndex].tsdfValue;
+			smoothedVoxel.weight = regularGrid->elements[flatIndex].weight;
+			smoothedVoxel.color = regularGrid->elements[flatIndex].color;
+		}
+
+		smoothedVoxel.normal = normalize(normalSum);
+
+		// Write the smoothed voxel to the output buffer
+		smoothedElements[flatIndex] = smoothedVoxel;
+	}
 
 	//---------------------------------------------------------------------------------------------------
 	// Utility Functions
@@ -978,13 +1117,13 @@ namespace CUDA
 
 			t = Time::End(t, "Copy data to device");
 
-			nvtxRangePushA("Insert");
-
 			rg.Integrate(patchBuffers);
 
-			nvtxRangePop();
-
 			t = Time::End(t, "Insert using PatchBuffers");
+
+			rg.SmoothTSDF();
+
+			t = Time::End(t, "SmoothTSDF");
 		}
 
 #ifdef MARCHING_CUBES
