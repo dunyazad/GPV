@@ -171,6 +171,7 @@ namespace CUDA
 
 		RegularGrid(const float3& center, uint32_t dimensionX, uint32_t dimensionY, uint32_t dimensionZ, float voxelSize)
 		{
+#ifdef MALLOC_MANAGED
 			checkCudaErrors(cudaMallocManaged(&internal, sizeof(Internal)));
 
 			internal->center = center;
@@ -182,11 +183,26 @@ namespace CUDA
 			internal->maxWeight = 20.0f;
 
 			checkCudaErrors(cudaMallocManaged(&(internal->elements), sizeof(T) * internal->numberOfVoxels));
+#else
+			checkCudaErrors(cudaMalloc(&internal, sizeof(Internal)));
+
+			h_internal.center = center;
+			h_internal.elements = nullptr;
+			h_internal.dimensions = make_uint3(dimensionX, dimensionY, dimensionZ);
+			h_internal.voxelSize = voxelSize;
+			h_internal.numberOfVoxels = dimensionX * dimensionY * dimensionZ;
+			h_internal.truncationDistance = 2.0f;
+			h_internal.maxWeight = 20.0f;
+
+			checkCudaErrors(cudaMalloc(&(h_internal.elements), sizeof(T) * h_internal.numberOfVoxels));
+
+			cudaMemcpy(internal, &h_internal, sizeof(Internal), cudaMemcpyHostToDevice);
+#endif
 		}
 
 		~RegularGrid()
 		{
-			checkCudaErrors(cudaFree(internal->elements));
+			checkCudaErrors(cudaFree(h_internal.elements));
 			checkCudaErrors(cudaFree(internal));
 		}
 
@@ -196,9 +212,9 @@ namespace CUDA
 
 			dim3 threadsPerBlock(8, 8, 8);  // 8x8x8 threads per block
 			dim3 blocksPerGrid(
-				(internal->dimensions.x + threadsPerBlock.x - 1) / threadsPerBlock.x,
-				(internal->dimensions.y + threadsPerBlock.y - 1) / threadsPerBlock.y,
-				(internal->dimensions.z + threadsPerBlock.z - 1) / threadsPerBlock.z
+				(h_internal.dimensions.x + threadsPerBlock.x - 1) / threadsPerBlock.x,
+				(h_internal.dimensions.y + threadsPerBlock.y - 1) / threadsPerBlock.y,
+				(h_internal.dimensions.z + threadsPerBlock.z - 1) / threadsPerBlock.z
 			);
 
 			Kernel_Clear<T> << <blocksPerGrid, threadsPerBlock >> > (internal);
@@ -343,7 +359,7 @@ namespace CUDA
 			// Allocate device memory for vertices and vertex count
 			Vertex* d_meshVertices;
 			int* d_vertexCount;
-			int maxVertices = internal->numberOfVoxels * 15;  // An estimated upper limit for the number of vertices
+			int maxVertices = h_internal.numberOfVoxels * 15;  // An estimated upper limit for the number of vertices
 
 			checkCudaErrors(cudaMalloc(&d_meshVertices, sizeof(Vertex) * maxVertices));
 			checkCudaErrors(cudaMalloc(&d_vertexCount, sizeof(int)));
@@ -352,13 +368,21 @@ namespace CUDA
 			// Launch the CUDA kernel for mesh extraction
 			dim3 threadsPerBlock(8, 8, 8);
 			dim3 blocksPerGrid(
-				(internal->dimensions.x + threadsPerBlock.x - 1) / threadsPerBlock.x,
-				(internal->dimensions.y + threadsPerBlock.y - 1) / threadsPerBlock.y,
-				(internal->dimensions.z + threadsPerBlock.z - 1) / threadsPerBlock.z
+				(h_internal.dimensions.x + threadsPerBlock.x - 1) / threadsPerBlock.x,
+				(h_internal.dimensions.y + threadsPerBlock.y - 1) / threadsPerBlock.y,
+				(h_internal.dimensions.z + threadsPerBlock.z - 1) / threadsPerBlock.z
 			);
+
+			auto t = Time::Now();
+
+			nvtxRangePushA("ExtractMeshCUDA_Kernel");
 
 			Kernel_ExtractMesh<T> << <blocksPerGrid, threadsPerBlock >> > (internal, d_meshVertices, d_vertexCount);
 			checkCudaErrors(cudaDeviceSynchronize());
+
+			nvtxRangePop();
+
+			t = Time::End(t, "ExtractMeshCUDA_Kernel");
 
 			// Copy the resulting vertices back to the host
 			int h_vertexCount;
@@ -613,6 +637,7 @@ namespace CUDA
 		}
 
 		Internal* internal;
+		Internal h_internal;
 	};
 
 	//---------------------------------------------------------------------------------------------------
@@ -1149,9 +1174,16 @@ namespace CUDA
 		float3 positions[8];
 		float3 normals[8];
 
+		uint3 offsets[8] = {
+		{0, 0, 0}, {1, 0, 0},
+		{1, 1, 0}, {0, 1, 0},
+		{0, 0, 1}, {1, 0, 1},
+		{1, 1, 1}, {0, 1, 1}
+		};
+
 		for (int i = 0; i < 8; ++i)
 		{
-			uint3 cornerOffset = getCornerOffset(i);
+			uint3 cornerOffset = offsets[i];
 			uint3 cornerIndex = make_uint3(currentIndex.x + cornerOffset.x, currentIndex.y + cornerOffset.y, currentIndex.z + cornerOffset.z);
 			size_t cornerFlatIndex = GetFlatIndex(cornerIndex, regularGrid->dimensions);
 
@@ -1267,26 +1299,31 @@ namespace CUDA
 		vtkFile << "vtk output\n";
 		vtkFile << "ASCII\n";
 		vtkFile << "DATASET STRUCTURED_POINTS\n";
-		vtkFile << "DIMENSIONS " << internal.dimensions.x << " "
-			<< internal.dimensions.y << " " << internal.dimensions.z << "\n";
-		vtkFile << "SPACING " << internal.voxelSize << " "
-			<< internal.voxelSize << " " << internal.voxelSize << "\n";
+		vtkFile << "DIMENSIONS " << rg.h_internal.dimensions.x << " "
+			<< rg.h_internal.dimensions.y << " " << rg.h_internal.dimensions.z << "\n";
+		vtkFile << "SPACING " << rg.h_internal.voxelSize << " "
+			<< rg.h_internal.voxelSize << " " << rg.h_internal.voxelSize << "\n";
 		vtkFile << "ORIGIN 0.0 0.0 0.0\n";
-		vtkFile << "POINT_DATA " << (internal.dimensions.x * internal.dimensions.y * internal.dimensions.z) << "\n";
+		vtkFile << "POINT_DATA " << (rg.h_internal.dimensions.x * rg.h_internal.dimensions.y * rg.h_internal.dimensions.z) << "\n";
 		vtkFile << "SCALARS TSDF float 1\n";
 		vtkFile << "LOOKUP_TABLE default\n";
 
+		CUDA::Voxel* elements = new CUDA::Voxel[rg.h_internal.numberOfVoxels];
+		cudaMemcpy(elements, rg.h_internal.elements, sizeof(CUDA::Voxel) * rg.h_internal.numberOfVoxels, cudaMemcpyDeviceToHost);
+		checkCudaErrors(cudaDeviceSynchronize());
+
 		// TSDF °ª ÀúÀå
-		for (uint32_t z = 0; z < internal.dimensions.z; ++z) {
-			for (uint32_t y = 0; y < internal.dimensions.y; ++y) {
-				for (uint32_t x = 0; x < internal.dimensions.x; ++x) {
-					size_t flatIndex = z * internal.dimensions.x * internal.dimensions.y
-						+ y * internal.dimensions.x + x;
-					vtkFile << internal.elements[flatIndex].tsdfValue << "\n";
+		for (uint32_t z = 0; z < rg.h_internal.dimensions.z; ++z) {
+			for (uint32_t y = 0; y < rg.h_internal.dimensions.y; ++y) {
+				for (uint32_t x = 0; x < rg.h_internal.dimensions.x; ++x) {
+					size_t flatIndex = z * rg.h_internal.dimensions.x * rg.h_internal.dimensions.y
+						+ y * rg.h_internal.dimensions.x + x;
+					vtkFile << elements[flatIndex].tsdfValue << "\n";
 				}
 			}
 		}
 
+		delete[] elements;
 		vtkFile.close();
 		std::cout << "VTK file saved to " << filename << std::endl;
 	}
@@ -1586,7 +1623,11 @@ namespace CUDA
 #endif // 
 
 		{
+			t = Time::Now();
+
 			std::vector<Vertex> mesh = rg.ExtractMeshCUDA();
+
+			t = Time::End(t, "ExtractMeshCUDA");
 
 			printf("size of mesh : %llu\n", mesh.size());
 
