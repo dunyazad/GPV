@@ -7,11 +7,12 @@ Color3::Color3(unsigned char r, unsigned char g, unsigned char b)
 	components[2] = b;
 }
 
-void Color3::FromNormalized(float r, float g, float b)
+Color3 Color3::FromNormalized(float r, float g, float b)
 {
-	components[0] = (unsigned char)(r * 255.0f);
-	components[1] = (unsigned char)(g * 255.0f);
-	components[2] = (unsigned char)(b * 255.0f);
+	return Color3(
+		(unsigned char)(r * 255.0f),
+		(unsigned char)(g * 255.0f),
+		(unsigned char)(b * 255.0f));
 }
 
 const Color3 Color3::Black(0, 0, 0);
@@ -40,12 +41,13 @@ Color4::Color4(unsigned char r, unsigned char g, unsigned char b, unsigned char 
 	components[3] = a;
 }
 
-void Color4::FromNormalized(float r, float g, float b, float a)
+Color4 Color4::FromNormalized(float r, float g, float b, float a)
 {
-	components[0] = (unsigned char)(r * 255.0f);
-	components[1] = (unsigned char)(g * 255.0f);
-	components[2] = (unsigned char)(b * 255.0f);
-	components[3] = (unsigned char)(a * 255.0f);
+	return Color4(
+	(unsigned char)(r * 255.0f),
+	(unsigned char)(g * 255.0f),
+	(unsigned char)(b * 255.0f),
+	(unsigned char)(a * 255.0f));
 }
 
 const Color4 Color4::Black(0, 0, 0, 255);

@@ -230,18 +230,18 @@ const int edgeTable[256] = {
 		0x70c, 0x605, 0x50f, 0x406, 0x30a, 0x203, 0x109, 0x0 };
 // 모서리와 정점을 연결하는 맵핑 배열 (12개의 모서리와 각 모서리에 연결된 두 정점)
 const int edgeVertexMap[12][2] = {
-    {0, 1},  // Edge 0 connects vertex 0 and vertex 1
-    {1, 2},  // Edge 1 connects vertex 1 and vertex 2
-    {2, 3},  // Edge 2 connects vertex 2 and vertex 3
-    {3, 0},  // Edge 3 connects vertex 3 and vertex 0
-    {4, 5},  // Edge 4 connects vertex 4 and vertex 5
-    {5, 6},  // Edge 5 connects vertex 5 and vertex 6
-    {6, 7},  // Edge 6 connects vertex 6 and vertex 7
-    {7, 4},  // Edge 7 connects vertex 7 and vertex 4
-    {0, 4},  // Edge 8 connects vertex 0 and vertex 4
-    {1, 5},  // Edge 9 connects vertex 1 and vertex 5
-    {2, 6},  // Edge 10 connects vertex 2 and vertex 6
-    {3, 7}   // Edge 11 connects vertex 3 and vertex 7
+    {0, 1},  // Edge 0 connects Vertex 0 → Vertex 1
+    {1, 2},  // Edge 1 connects Vertex 1 → Vertex 2
+    {2, 3},  // Edge 2 connects Vertex 2 → Vertex 3
+    {3, 0},  // Edge 3 connects Vertex 3 → Vertex 0
+    {4, 5},  // Edge 4 connects Vertex 4 → Vertex 5
+    {5, 6},  // Edge 5 connects Vertex 5 → Vertex 6
+    {6, 7},  // Edge 6 connects Vertex 6 → Vertex 7
+    {7, 4},  // Edge 7 connects Vertex 7 → Vertex 4
+    {0, 4},  // Edge 8 connects Vertex 0 → Vertex 4
+    {1, 5},  // Edge 9 connects Vertex 1 → Vertex 5
+    {2, 6},  // Edge 10 connects Vertex 2 → Vertex 6
+    {3, 7}   // Edge 11 connects Vertex 3 → Vertex 7
 };
 const int triTable[256][16] =
 { {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},

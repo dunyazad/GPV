@@ -21,7 +21,7 @@ int main()
 	app.AddMouseMoveCallback(OnMouseMove);
 	app.AddMouseWheelScrollCallback(OnMouseWheelScroll);
 #ifdef _WINDOWS
-	app.AddUSBEventCallback(OnUSBEvent);
+	//app.AddUSBEventCallback(OnUSBEvent);
 #endif
 	app.AddAppStartCallback(AppStartCallback);
 

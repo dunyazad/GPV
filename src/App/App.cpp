@@ -79,6 +79,7 @@ void App::Run()
 	interactor = vtkSmartPointer<vtkRenderWindowInteractor>::New();
 	customTrackballStyle = vtkSmartPointer<CustomTrackballStyle>::New();
 	customTrackballStyle->SetApp(this);
+	//customTrackballStyle->SetMotionFactor(300);
 	interactor->SetInteractorStyle(customTrackballStyle);
 	interactor->SetRenderWindow(renderWindow);
 	interactor->Initialize();

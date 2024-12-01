@@ -82,6 +82,9 @@ namespace CUDA
 	__host__ __device__
 		float3 GetPosition(const float3& gridCenter, uint3 gridDimensions, float voxelSize, const uint3& index);
 
+	__host__ __device__
+		size_t GetFlatIndex(const uint3& index, const uint3& dimensions);
+
 	template<typename T>
 	class RegularGrid
 	{
@@ -94,6 +97,7 @@ namespace CUDA
 			float voxelSize;
 			size_t numberOfVoxels;
 			float truncationDistance;
+			float maxWeight;
 		};
 
 		RegularGrid(const float3& center, uint32_t dimensionX, uint32_t dimensionY, uint32_t dimensionZ, float voxelSize)
@@ -105,7 +109,8 @@ namespace CUDA
 			internal->dimensions = make_uint3(dimensionX, dimensionY, dimensionZ);
 			internal->voxelSize = voxelSize;
 			internal->numberOfVoxels = dimensionX * dimensionY * dimensionZ;
-			internal->truncationDistance = 1.0f;
+			internal->truncationDistance = 2.0f;
+			internal->maxWeight = 20.0f;
 
 			checkCudaErrors(cudaMallocManaged(&(internal->elements), sizeof(T) * internal->numberOfVoxels));
 		}
@@ -213,6 +218,128 @@ namespace CUDA
 			return meshVertices;
 		}
 
+		std::vector<Vertex> ExtractMeshUsingDualContouring() {
+			std::vector<Vertex> meshVertices;
+
+			// 3D 배열로 각 셀의 정점을 저장
+			std::vector<std::vector<std::vector<float3>>> cellVertices(
+				internal->dimensions.z,
+				std::vector<std::vector<float3>>(
+					internal->dimensions.y,
+					std::vector<float3>(internal->dimensions.x, make_float3(0.0f, 0.0f, 0.0f))
+					)
+			);
+
+			// Iterate over all cells in the grid
+			for (uint32_t z = 0; z < internal->dimensions.z - 1; ++z) {
+				for (uint32_t y = 0; y < internal->dimensions.y - 1; ++y) {
+					for (uint32_t x = 0; x < internal->dimensions.x - 1; ++x) {
+						// 1. Collect Hermite data (zero-crossing points and normals)
+						std::vector<float3> edgeVertices;
+						std::vector<float3> edgeNormals;
+
+						for (int edgeIndex = 0; edgeIndex < 12; ++edgeIndex) {
+							int v0 = edgeVertexMap[edgeIndex][0];
+							int v1 = edgeVertexMap[edgeIndex][1];
+
+							auto cornerOffset0 = getCornerOffset(v0);
+							auto cornerOffset1 = getCornerOffset(v1);
+
+							uint3 corner0 = make_uint3(cornerOffset0.x + x, cornerOffset0.y + y, cornerOffset0.z + z);
+							uint3 corner1 = make_uint3(cornerOffset1.x + x, cornerOffset1.y + y, cornerOffset1.z + z);
+
+							size_t index0 = GetFlatIndex(corner0, internal->dimensions);
+							size_t index1 = GetFlatIndex(corner1, internal->dimensions);
+
+							float tsdf0 = internal->elements[index0].tsdfValue;
+							float tsdf1 = internal->elements[index1].tsdfValue;
+
+							if ((tsdf0 < 0 && tsdf1 > 0) || (tsdf0 > 0 && tsdf1 < 0)) {
+								// Interpolate the zero-crossing position
+								float t = tsdf0 / (tsdf0 - tsdf1);
+								float3 p0 = GetPosition(internal->center, internal->dimensions, internal->voxelSize, corner0);
+								float3 p1 = GetPosition(internal->center, internal->dimensions, internal->voxelSize, corner1);
+
+								float3 zeroCrossing = make_float3(
+									p0.x + t * (p1.x - p0.x),
+									p0.y + t * (p1.y - p0.y),
+									p0.z + t * (p1.z - p0.z)
+								);
+
+								float3 normal = normalize(internal->elements[index0].normal);
+
+								edgeVertices.push_back(zeroCrossing);
+								edgeNormals.push_back(normal);
+							}
+						}
+
+						// 2. Compute optimal vertex inside the cell
+						if (!edgeVertices.empty()) {
+							Vertex optimalVertex = ComputeOptimalVertex(edgeVertices, edgeNormals);
+
+							// Save the optimal vertex for the current cell
+							cellVertices[z][y][x] = optimalVertex.position;
+
+							// Link vertices to form triangles with neighboring cells
+							if (x > 0 && y > 0 && z > 0) {
+								Vertex v0 = optimalVertex;
+								Vertex v1, v2, v3;
+
+								// Fetch neighboring vertices
+								v1.position = cellVertices[z][y][x - 1]; // Left neighbor
+								v2.position = cellVertices[z][y - 1][x]; // Below neighbor
+								v3.position = cellVertices[z - 1][y][x]; // Back neighbor
+
+								// Add triangles
+								meshVertices.push_back(v0);
+								meshVertices.push_back(v1);
+								meshVertices.push_back(v2);
+
+								meshVertices.push_back(v0);
+								meshVertices.push_back(v2);
+								meshVertices.push_back(v3);
+							}
+						}
+					}
+				}
+			}
+
+			return meshVertices;
+		}
+
+		// Helper function to compute the optimal vertex
+		Vertex ComputeOptimalVertex(const std::vector<float3>& edgeVertices, const std::vector<float3>& edgeNormals) {
+			// Use Hermite data (positions and normals) to minimize quadratic error
+			float3 optimalPosition = make_float3(0.0f, 0.0f, 0.0f);
+			float3 optimalNormal = make_float3(0.0f, 0.0f, 0.0f);
+
+			// Solve the quadratic error metric using Hermite data
+			for (size_t i = 0; i < edgeVertices.size(); ++i) {
+				optimalPosition.x += edgeVertices[i].x;
+				optimalPosition.y += edgeVertices[i].y;
+				optimalPosition.z += edgeVertices[i].z;
+
+				optimalNormal.x += edgeNormals[i].x;
+				optimalNormal.y += edgeNormals[i].y;
+				optimalNormal.z += edgeNormals[i].z;
+			}
+
+			optimalPosition.x /= edgeVertices.size();
+			optimalPosition.y /= edgeVertices.size();
+			optimalPosition.z /= edgeVertices.size();
+
+			optimalNormal = normalize(optimalNormal);
+
+			// Return the optimal vertex
+			Vertex vertex;
+			vertex.position = optimalPosition;
+			vertex.normal = optimalNormal;
+			vertex.color = make_float3(0.5f, 0.5f, 0.5f); // Set a default color or compute based on some criteria.
+
+			return vertex;
+		}
+
+
 		// 각 코너의 오프셋을 구하는 함수 (Marching Cubes용)
 		uint3 getCornerOffset(int cornerIndex)
 		{
@@ -269,70 +396,37 @@ namespace CUDA
 
 		// Divergence 기반으로 메시를 추출하는 함수 추가
 		// 기존의 ExtractMeshFromPotentialField 코드
-		std::vector<Vertex> ExtractMeshFromPotentialField(float* potentialField)
-		{
+		std::vector<Vertex> ExtractMeshFromPotentialField(float* potentialField) {
 			std::vector<Vertex> meshVertices;
 
-			float minValue = FLT_MAX;
-			float maxValue = -FLT_MAX;
-
-			// 잠재 필드의 최소/최대 값 계산
-			for (uint32_t z = 0; z < internal->dimensions.z; ++z)
-			{
-				for (uint32_t y = 0; y < internal->dimensions.y; ++y)
-				{
-					for (uint32_t x = 0; x < internal->dimensions.x; ++x)
-					{
-						size_t flatIndex = z * (internal->dimensions.x * internal->dimensions.y) +
-							y * internal->dimensions.x + x;
-						float value = potentialField[flatIndex];
-						minValue = fminf(minValue, value);
-						maxValue = fmaxf(maxValue, value);
-					}
-				}
-			}
-
-			float intensityRange = maxValue - minValue;
-
-			for (uint32_t z = 0; z < internal->dimensions.z - 1; ++z)
-			{
-				for (uint32_t y = 0; y < internal->dimensions.y - 1; ++y)
-				{
-					for (uint32_t x = 0; x < internal->dimensions.x - 1; ++x)
-					{
+			for (uint32_t z = 0; z < internal->dimensions.z - 1; ++z) {
+				for (uint32_t y = 0; y < internal->dimensions.y - 1; ++y) {
+					for (uint32_t x = 0; x < internal->dimensions.x - 1; ++x) {
 						std::array<float, 8> potentialValues;
 						std::array<float3, 8> positions;
 
-						for (int i = 0; i < 8; ++i)
-						{
+						for (int i = 0; i < 8; ++i) {
 							uint3 cornerOffset = getCornerOffset(i);
 							uint3 cornerIndex = make_uint3(x + cornerOffset.x, y + cornerOffset.y, z + cornerOffset.z);
-							size_t flatIndex = cornerIndex.z * (internal->dimensions.x * internal->dimensions.y) +
-								cornerIndex.y * internal->dimensions.x +
-								cornerIndex.x;
+							size_t flatIndex = GetFlatIndex(cornerIndex, internal->dimensions);
 
 							potentialValues[i] = potentialField[flatIndex];
 							positions[i] = GetPosition(internal->center, internal->dimensions, internal->voxelSize, cornerIndex);
 						}
 
-						// Marching Cubes 알고리즘을 위한 인덱스 계산
+						// Relaxed condition for cubeIndex
 						int cubeIndex = 0;
-						for (int i = 0; i < 8; ++i)
-						{
-							if (potentialValues[i] < 0)
-							{
+						for (int i = 0; i < 8; ++i) {
+							if (potentialValues[i] < 0.05f) {  // Changed threshold
 								cubeIndex |= (1 << i);
 							}
 						}
 
-						if (cubeIndex == 0 || cubeIndex == 255)
-						{
-							continue;
+						if (cubeIndex == 0 || cubeIndex == 255) {
+							continue; // No zero crossing
 						}
 
-						// 삼각형 처리
-						for (int i = 0; triTable[cubeIndex][i] != -1; i += 3)
-						{
+						for (int i = 0; triTable[cubeIndex][i] != -1; i += 3) {
 							int edgeA = triTable[cubeIndex][i];
 							int edgeB = triTable[cubeIndex][i + 1];
 							int edgeC = triTable[cubeIndex][i + 2];
@@ -341,35 +435,14 @@ namespace CUDA
 							Vertex vertexB = interpolateVertex_Potential(edgeB, positions, potentialValues);
 							Vertex vertexC = interpolateVertex_Potential(edgeC, positions, potentialValues);
 
-							// 노말 계산
+							// Calculate normals if needed
 							float3 normal = normalize(cross(
-								make_float3(vertexB.position.x - vertexA.position.x,
-									vertexB.position.y - vertexA.position.y,
-									vertexB.position.z - vertexA.position.z),
-								make_float3(vertexC.position.x - vertexA.position.x,
-									vertexC.position.y - vertexA.position.y,
-									vertexC.position.z - vertexA.position.z)
+								vertexB.position - vertexA.position,
+								vertexC.position - vertexA.position
 							));
+							vertexA.normal = vertexB.normal = vertexC.normal = normal;
 
-							vertexA.normal = normal;
-							vertexB.normal = normal;
-							vertexC.normal = normal;
-
-							// 컬러 계산
-							float colorIntensityA = (potentialValues[edgeVertexMap[edgeA][0]] - minValue) / intensityRange;
-							float colorIntensityB = (potentialValues[edgeVertexMap[edgeB][0]] - minValue) / intensityRange;
-							float colorIntensityC = (potentialValues[edgeVertexMap[edgeC][0]] - minValue) / intensityRange;
-
-							colorIntensityA = fmaxf(0.0f, fminf(1.0f, colorIntensityA));
-							colorIntensityB = fmaxf(0.0f, fminf(1.0f, colorIntensityB));
-							colorIntensityC = fmaxf(0.0f, fminf(1.0f, colorIntensityC));
-
-							// 컬러 적용 (빨강-초록-파랑 그라디언트)
-							vertexA.color = make_float3(1.0f - colorIntensityA, colorIntensityA, 0.0f);
-							vertexB.color = make_float3(1.0f - colorIntensityB, colorIntensityB, 0.0f);
-							vertexC.color = make_float3(1.0f - colorIntensityC, colorIntensityC, 0.0f);
-
-							// 정점 추가
+							// Add to mesh
 							meshVertices.push_back(vertexA);
 							meshVertices.push_back(vertexB);
 							meshVertices.push_back(vertexC);
@@ -380,8 +453,6 @@ namespace CUDA
 
 			return meshVertices;
 		}
-		
-
 
 		// 두 정점 사이의 보간된 정점을 생성하는 함수 (포텐셜 필드 보간)
 		Vertex interpolateVertex_Potential(int edgeIndex, const std::array<float3, 8>& positions, const std::array<float, 8>& potentialValues)
@@ -495,7 +566,39 @@ namespace CUDA
 			dz = (regularGrid->elements[zPlus].tsdfValue - regularGrid->elements[zMinus].tsdfValue) / (2.0f * regularGrid->voxelSize);
 		}
 
-		divergenceOutput[flatIndex] = dx + dy + dz;
+		//divergenceOutput[flatIndex] = dx + dy + dz;
+
+		if (fabs(dx) > 0.001f || fabs(dy) > 0.001f || fabs(dz) > 0.001f) {
+			divergenceOutput[flatIndex] = dx + dy + dz;
+		}
+		else {
+			divergenceOutput[flatIndex] = 0.0f;
+		}
+	}
+
+	__global__ void ComputeScreenedPotential(
+		RegularGrid<Voxel>::Internal* regularGrid,
+		float* divergence,
+		float* inputField,
+		float* screenedField,
+		float lambda)
+	{
+		size_t threadX = blockIdx.x * blockDim.x + threadIdx.x;
+		size_t threadY = blockIdx.y * blockDim.y + threadIdx.y;
+		size_t threadZ = blockIdx.z * blockDim.z + threadIdx.z;
+
+		if (threadX >= regularGrid->dimensions.x ||
+			threadY >= regularGrid->dimensions.y ||
+			threadZ >= regularGrid->dimensions.z) return;
+
+		size_t flatIndex = threadZ * (regularGrid->dimensions.x * regularGrid->dimensions.y) +
+			threadY * regularGrid->dimensions.x + threadX;
+
+		float divergenceValue = divergence[flatIndex];
+		float inputValue = inputField[flatIndex];
+
+		// 스크리닝 조건에 따라 잠재 필드 업데이트
+		screenedField[flatIndex] = divergenceValue + lambda * inputValue;
 	}
 
 	void SolvePoissonEquation(RegularGrid<Voxel>::Internal* regularGrid, float* divergence)
@@ -548,6 +651,116 @@ namespace CUDA
 		checkCudaErrors(cudaFree(d_x));
 	}
 
+	void SolveScreenedPoissonEquation(
+		RegularGrid<Voxel>::Internal* regularGrid,
+		float* divergence,
+		float* inputField,
+		float* potentialField,
+		float lambda)
+	{
+		// cusolver 및 cusparse 핸들 생성
+		cusolverSpHandle_t cusolverHandle;
+		cusparseMatDescr_t descrA;
+
+		cusolverSpCreate(&cusolverHandle);
+		cusparseCreateMatDescr(&descrA);
+		cusparseSetMatType(descrA, CUSPARSE_MATRIX_TYPE_GENERAL);
+		cusparseSetMatIndexBase(descrA, CUSPARSE_INDEX_BASE_ZERO);
+
+		// 잠재 필드 초기화
+		int numRows = regularGrid->dimensions.x * regularGrid->dimensions.y * regularGrid->dimensions.z;
+		checkCudaErrors(cudaMemset(potentialField, 0, sizeof(float) * numRows));
+		checkCudaErrors(cudaMemset(inputField, 0, sizeof(float) * numRows));
+
+		// 경계 조건 설정: 경계 부분의 잠재 필드를 고정하여 안정화
+		for (uint32_t z = 0; z < regularGrid->dimensions.z; ++z) {
+			for (uint32_t y = 0; y < regularGrid->dimensions.y; ++y) {
+				for (uint32_t x = 0; x < regularGrid->dimensions.x; ++x) {
+					if (x == 0 || y == 0 || z == 0 ||
+						x == regularGrid->dimensions.x - 1 ||
+						y == regularGrid->dimensions.y - 1 ||
+						z == regularGrid->dimensions.z - 1) {
+						size_t flatIndex = GetFlatIndex(make_uint3(x, y, z), regularGrid->dimensions);
+						potentialField[flatIndex] = 0.0f; // 경계 조건 값 설정
+					}
+				}
+			}
+		}
+
+		// CUDA 커널을 사용하여 스크리닝 잠재 필드 계산
+		dim3 threadsPerBlock(8, 8, 8);
+		dim3 blocksPerGrid(
+			(regularGrid->dimensions.x + threadsPerBlock.x - 1) / threadsPerBlock.x,
+			(regularGrid->dimensions.y + threadsPerBlock.y - 1) / threadsPerBlock.y,
+			(regularGrid->dimensions.z + threadsPerBlock.z - 1) / threadsPerBlock.z
+		);
+
+		float* screenedField;
+		checkCudaErrors(cudaMallocManaged(&screenedField, sizeof(float) * numRows));
+		checkCudaErrors(cudaMemset(screenedField, 0, sizeof(float) * numRows));
+
+		// 스크리닝 잠재 필드 계산
+		ComputeScreenedPotential << <blocksPerGrid, threadsPerBlock >> > (
+			regularGrid, divergence, inputField, screenedField, lambda
+			);
+		checkCudaErrors(cudaDeviceSynchronize());
+
+		// 경계 조건 유지 (ComputeScreenedPotential 이후에도 경계값은 고정해야 함)
+		for (uint32_t z = 0; z < regularGrid->dimensions.z; ++z) {
+			for (uint32_t y = 0; y < regularGrid->dimensions.y; ++y) {
+				for (uint32_t x = 0; x < regularGrid->dimensions.x; ++x) {
+					if (x == 0 || y == 0 || z == 0 ||
+						x == regularGrid->dimensions.x - 1 ||
+						y == regularGrid->dimensions.y - 1 ||
+						z == regularGrid->dimensions.z - 1) {
+						size_t flatIndex = GetFlatIndex(make_uint3(x, y, z), regularGrid->dimensions);
+						screenedField[flatIndex] = 0.0f; // 경계 조건 값 설정
+					}
+				}
+			}
+		}
+
+		// Poisson 방정식을 풀기 위한 cuSolver 설정
+		float tol = 1e-6f;
+		int reorder = 0;
+		int singularity = 0;
+
+		// CSR 포맷을 위한 메모리 할당
+		int nnz = numRows * 7; // 7-point stencil
+		float* d_A_values;
+		int* d_A_rowPtr;
+		int* d_A_colInd;
+		float* d_x;
+
+		checkCudaErrors(cudaMalloc((void**)&d_A_values, sizeof(float) * nnz));
+		checkCudaErrors(cudaMalloc((void**)&d_A_rowPtr, sizeof(int) * (numRows + 1)));
+		checkCudaErrors(cudaMalloc((void**)&d_A_colInd, sizeof(int) * nnz));
+		checkCudaErrors(cudaMalloc((void**)&d_x, sizeof(float) * numRows));
+
+		// cuSolver를 사용하여 스크린드 포아송 방정식 풀기
+		cusolverSpScsrlsvqr(
+			cusolverHandle, numRows, nnz,
+			descrA, d_A_values, d_A_rowPtr, d_A_colInd,
+			screenedField, tol, reorder, d_x, &singularity
+		);
+
+		if (singularity >= 0) {
+			printf("WARNING: A is singular at row %d\n", singularity);
+		}
+
+		// 결과를 잠재 필드에 복사
+		checkCudaErrors(cudaMemcpy(potentialField, d_x, sizeof(float) * numRows, cudaMemcpyDeviceToDevice));
+
+		// 메모리 해제
+		cusolverSpDestroy(cusolverHandle);
+		cusparseDestroyMatDescr(descrA);
+		checkCudaErrors(cudaFree(screenedField));
+		checkCudaErrors(cudaFree(d_A_values));
+		checkCudaErrors(cudaFree(d_A_rowPtr));
+		checkCudaErrors(cudaFree(d_A_colInd));
+		checkCudaErrors(cudaFree(d_x));
+	}
+
 	template<typename T>
 	__global__ void Kernel_Integrate(RegularGrid<T>::Internal* regularGrid, PatchBuffers patchBuffers)
 	{
@@ -558,50 +771,108 @@ namespace CUDA
 		float3 color = patchBuffers.inputColors[threadid];
 		float3 normal = patchBuffers.inputNormals[threadid];
 
-		auto gridIndex = GetIndex(regularGrid->center, regularGrid->dimensions, regularGrid->voxelSize, p);
+		//if (normal.z < 0) return;
 
-		if (gridIndex.x == UINT_MAX || gridIndex.y == UINT_MAX || gridIndex.z == UINT_MAX) return;
+		auto currentIndex = GetIndex(regularGrid->center, regularGrid->dimensions, regularGrid->voxelSize, p);
+		if (currentIndex.x == UINT_MAX || currentIndex.y == UINT_MAX || currentIndex.z == UINT_MAX) return;
 
-		size_t flatIndex = gridIndex.z * (regularGrid->dimensions.x * regularGrid->dimensions.y) +
-			gridIndex.y * regularGrid->dimensions.x + gridIndex.x;
+		int offset = 1;
+		for (uint32_t nzi = currentIndex.z - offset; nzi < currentIndex.z + offset; nzi++)
+		{
+			if (currentIndex.z < offset || nzi >= regularGrid->dimensions.z) continue;
 
-		float3 voxelCenter = GetPosition(regularGrid->center, regularGrid->dimensions, regularGrid->voxelSize, gridIndex);
+			for (uint32_t nyi = currentIndex.y - offset; nyi < currentIndex.y + offset; nyi++)
+			{
+				if (currentIndex.y < offset || nyi >= regularGrid->dimensions.y) continue;
 
-		float distance = length(p - voxelCenter);
+				for (uint32_t nxi = currentIndex.x - offset; nxi < currentIndex.x + offset; nxi++)
+				{
+					if (currentIndex.x < offset || nxi >= regularGrid->dimensions.x) continue;
 
-		// signedDistance는 포인트와 보폭 센터의 상대적 위치에 따라 음수 또는 양수가 될 수 있어야 합니다.
-		float signedDistance = dot(normal, voxelCenter - p) < 0 ? -distance : distance;
+					size_t index = nzi * (regularGrid->dimensions.x * regularGrid->dimensions.y) +
+						nyi * regularGrid->dimensions.x + nxi;
 
-		float tsdfValue = signedDistance / regularGrid->truncationDistance;
-		tsdfValue = fminf(1.0f, fmaxf(-1.0f, tsdfValue));
+					float3 voxelCenter = GetPosition(regularGrid->center, regularGrid->dimensions, regularGrid->voxelSize, make_uint3(nxi, nyi, nzi));
 
-		Voxel* voxel = &(regularGrid->elements[flatIndex]);
+					float distance = length(p - voxelCenter);
 
-		float newWeight = 1.0f;
+					float signedDistance = dot(normal, voxelCenter - p) < 0 ? -distance : distance;
 
-		float previousTsdf = voxel->tsdfValue;
-		float previousWeight = voxel->weight;
+					float tsdfValue = signedDistance / regularGrid->truncationDistance;
+					tsdfValue = fminf(1.0f, fmaxf(-1.0f, tsdfValue));
 
-		// Weighted average for TSDF
-		float updatedTsdf = (previousTsdf * previousWeight + tsdfValue * newWeight) / (previousWeight + newWeight);
-		float updatedWeight = previousWeight + newWeight;
+					Voxel* voxel = &(regularGrid->elements[index]);
 
-		voxel->tsdfValue = updatedTsdf;
-		voxel->weight = updatedWeight;
+					float newWeight = 1.0f;
 
-		voxel->color = make_float3(
-			fminf(1.0f, fmaxf(0.0f, (voxel->color.x * previousWeight + color.x * newWeight) / updatedWeight)),
-			fminf(1.0f, fmaxf(0.0f, (voxel->color.y * previousWeight + color.y * newWeight) / updatedWeight)),
-			fminf(1.0f, fmaxf(0.0f, (voxel->color.z * previousWeight + color.z * newWeight) / updatedWeight))
-		);
+					float previousTsdf = voxel->tsdfValue;
+					float previousWeight = voxel->weight;
 
-		voxel->normal = make_float3(
-			(voxel->normal.x * previousWeight + normal.x * newWeight) / updatedWeight,
-			(voxel->normal.y * previousWeight + normal.y * newWeight) / updatedWeight,
-			(voxel->normal.z * previousWeight + normal.z * newWeight) / updatedWeight
-		);
+					// Weighted average for TSDF
+					float updatedWeight = fminf(previousWeight + newWeight, regularGrid->maxWeight); // 최대 가중치 제한
+					float updatedTsdf = (previousTsdf * previousWeight + tsdfValue * newWeight) / updatedWeight;
 
-		voxel->normal = normalize(voxel->normal);
+					voxel->tsdfValue = updatedTsdf;
+					voxel->weight = updatedWeight;
+
+					// 컬러 및 노멀 업데이트
+					voxel->color = make_float3(
+						fminf(1.0f, fmaxf(0.0f, (voxel->color.x * previousWeight + color.x * newWeight) / updatedWeight)),
+						fminf(1.0f, fmaxf(0.0f, (voxel->color.y * previousWeight + color.y * newWeight) / updatedWeight)),
+						fminf(1.0f, fmaxf(0.0f, (voxel->color.z * previousWeight + color.z * newWeight) / updatedWeight))
+					);
+					voxel->normal = normalize(make_float3(
+						(voxel->normal.x * previousWeight + normal.x * newWeight) / updatedWeight,
+						(voxel->normal.y * previousWeight + normal.y * newWeight) / updatedWeight,
+						(voxel->normal.z * previousWeight + normal.z * newWeight) / updatedWeight
+					));
+
+					voxel->normal = normalize(voxel->normal);
+				}
+			}
+		}
+
+		//if (gridIndex.x == UINT_MAX || gridIndex.y == UINT_MAX || gridIndex.z == UINT_MAX) return;
+
+		//size_t flatIndex = gridIndex.z * (regularGrid->dimensions.x * regularGrid->dimensions.y) +
+		//	gridIndex.y * regularGrid->dimensions.x + gridIndex.x;
+
+		//float3 voxelCenter = GetPosition(regularGrid->center, regularGrid->dimensions, regularGrid->voxelSize, gridIndex);
+
+		//float distance = length(p - voxelCenter);
+
+		//float signedDistance = dot(normal, voxelCenter - p) < 0 ? -distance : distance;
+
+		//float tsdfValue = signedDistance / regularGrid->truncationDistance;
+		//tsdfValue = fminf(1.0f, fmaxf(-1.0f, tsdfValue));
+
+		//Voxel* voxel = &(regularGrid->elements[flatIndex]);
+
+		//float newWeight = 1.0f;
+
+		//float previousTsdf = voxel->tsdfValue;
+		//float previousWeight = voxel->weight;
+
+		//// Weighted average for TSDF
+		//float updatedWeight = fminf(previousWeight + newWeight, regularGrid->maxWeight); // 최대 가중치 제한
+		//float updatedTsdf = (previousTsdf * previousWeight + tsdfValue * newWeight) / updatedWeight;
+
+		//voxel->tsdfValue = updatedTsdf;
+		//voxel->weight = updatedWeight;
+
+		//// 컬러 및 노멀 업데이트
+		//voxel->color = make_float3(
+		//	fminf(1.0f, fmaxf(0.0f, (voxel->color.x * previousWeight + color.x * newWeight) / updatedWeight)),
+		//	fminf(1.0f, fmaxf(0.0f, (voxel->color.y * previousWeight + color.y * newWeight) / updatedWeight)),
+		//	fminf(1.0f, fmaxf(0.0f, (voxel->color.z * previousWeight + color.z * newWeight) / updatedWeight))
+		//);
+		//voxel->normal = normalize(make_float3(
+		//	(voxel->normal.x * previousWeight + normal.x * newWeight) / updatedWeight,
+		//	(voxel->normal.y * previousWeight + normal.y * newWeight) / updatedWeight,
+		//	(voxel->normal.z * previousWeight + normal.z * newWeight) / updatedWeight
+		//));
+
+		//voxel->normal = normalize(voxel->normal);
 
 		//printf("voxel->tsdfValue : %f\n", voxel->tsdfValue);
 
@@ -668,13 +939,19 @@ namespace CUDA
 		return position;
 	}
 
+	__host__ __device__
+		size_t GetFlatIndex(const uint3& index, const uint3& dimensions)
+	{
+		return index.z * dimensions.x * dimensions.y + index.y * dimensions.x + index.x;
+	}
+
 	////////////////////////////////////////////////////////////////////////////////////
 
 	void TestRegularGrid()
 	{
 		auto t = Time::Now();
 
-		RegularGrid<Voxel> rg({ 0.0f, 0.0f, 0.0f }, 100, 100, 100, 0.1f);
+		RegularGrid<Voxel> rg({ 0.0f, 0.0f, 0.0f }, 200, 200, 200, 0.1f);
 
 		t = Time::End(t, "RegularGrid allocation");
 
@@ -686,7 +963,8 @@ namespace CUDA
 			t = Time::Now();
 
 			stringstream ss;
-			ss << "C:\\Resources\\3D\\PLY\\Complete\\Lower_pointcloud.ply";
+			//ss << "C:\\Resources\\3D\\PLY\\Complete\\Lower_pointcloud.ply";
+			ss << "D:\\Resources\\3D\\PLY\\Lower_pointcloud.ply";
 
 			PLYFormat ply;
 			ply.Deserialize(ss.str());
@@ -709,41 +987,59 @@ namespace CUDA
 			t = Time::End(t, "Insert using PatchBuffers");
 		}
 
-		//{
-		//    t = Time::Now();
+#ifdef MARCHING_CUBES
+		{
+			//// VisualDebugging를 사용해 메시를 그리기 위한 코드
+			//for (const auto& vertex : mesh)
+			//{
+			//	VD::AddCube("ExtractedMesh",
+			//		{ vertex.position.x, vertex.position.y, vertex.position.z },
+			//		{ 0.01f, 0.01f, 0.01f },
+			//		{ vertex.normal.x, vertex.normal.y, vertex.normal.z },
+			//		Color4::FromNormalized(vertex.color.x, vertex.color.y, vertex.color.z, 1.0f));
+			//}
 
-		//    for (uint32_t z = 0; z < rg.internal->dimensions.z; z++)
-		//    {
-		//        for (uint32_t y = 0; y < rg.internal->dimensions.y; y++)
-		//        {
-		//            for (uint32_t x = 0; x < rg.internal->dimensions.x; x++)
-		//            {
-		//                size_t flatIndex = z * (rg.internal->dimensions.x * rg.internal->dimensions.y) +
-		//                    y * rg.internal->dimensions.x + x;
+			//t = Time::End(t, "Mesh Extraction and Visualization");
+		}
+#endif // MARCHING_CUBES
 
-		//                //printf("flatIndex : %llu\n", flatIndex);
+#ifdef SHOW_VOXELS
+		{
+			t = Time::Now();
 
-		//                auto voxel = rg.internal->elements[flatIndex];
+			for (uint32_t z = 0; z < rg.internal->dimensions.z; z++)
+			{
+				for (uint32_t y = 0; y < rg.internal->dimensions.y; y++)
+				{
+					for (uint32_t x = 0; x < rg.internal->dimensions.x; x++)
+					{
+						size_t flatIndex = z * (rg.internal->dimensions.x * rg.internal->dimensions.y) +
+							y * rg.internal->dimensions.x + x;
 
-		//                if (-0.1f <= voxel.tsdfValue && voxel.tsdfValue <= 0.1f)
-		//                    //if (-0.2f <= voxel.tsdfValue && voxel.tsdfValue <= 0.2f)
-		//                {
-		//                    auto p = GetPosition(rg.internal->center, rg.internal->dimensions, rg.internal->voxelSize, make_uint3(x, y, z));
-		//                    auto n = voxel.normal;
-		//                    //n = make_float3(0.0f, 0.0f, 1.0f);
-		//                    auto c = voxel.color;
-		//                    Color4 c4;
-		//                    c4.FromNormalized(c.x, c.y, c.z, 1.0f);
-		//                    VD::AddCube("voxels", { p.x + 20.0f, p.y, p.z },
-		//                        { rg.internal->voxelSize * 0.5f, rg.internal->voxelSize * 0.5f,rg.internal->voxelSize * 0.5f },
-		//                        { n.x, n.y, n.z }, c4);
-		//                }
-		//            }
-		//        }
-		//    }
+						//printf("flatIndex : %llu\n", flatIndex);
 
-		//    t = Time::End(t, "?????");
-		//}
+						auto voxel = rg.internal->elements[flatIndex];
+
+						if (-0.1f <= voxel.tsdfValue && voxel.tsdfValue <= 0.1f)
+							//if (-0.2f <= voxel.tsdfValue && voxel.tsdfValue <= 0.2f)
+						{
+							auto p = GetPosition(rg.internal->center, rg.internal->dimensions, rg.internal->voxelSize, make_uint3(x, y, z));
+							auto n = voxel.normal;
+							//n = make_float3(0.0f, 0.0f, 1.0f);
+							auto c = voxel.color;
+							Color4 c4;
+							c4.FromNormalized(c.x, c.y, c.z, 1.0f);
+							VD::AddCube("voxels", { p.x + 20.0f, p.y, p.z },
+								{ rg.internal->voxelSize * 0.5f, rg.internal->voxelSize * 0.5f,rg.internal->voxelSize * 0.5f },
+								{ n.x, n.y, n.z }, c4);
+						}
+					}
+				}
+			}
+
+			t = Time::End(t, "?????");
+		}
+#endif // SHOW_VOXELS
 
 		//{
 		//	t = Time::Now();
@@ -825,6 +1121,8 @@ namespace CUDA
 		//			Color4::White);
 		//	}
 		//}
+
+#ifdef POISSON_SURFACE_RECONSTRUCTION
 		{
 			// Divergence 계산
 			float* divergence;
@@ -844,6 +1142,11 @@ namespace CUDA
 
 			// 포아송 방정식을 풀기
 			SolvePoissonEquation(rg.internal, divergence);
+
+			//for (size_t i = 0; i < rg.internal->numberOfVoxels; ++i) {
+			//	printf("Potential field value at voxel %zu: %f\n", i, divergence[i]);
+			//}
+
 
 			// 포텐셜 필드 기반 메시 추출
 			std::vector<Vertex> mesh = rg.ExtractMeshFromPotentialField(divergence);
@@ -874,17 +1177,78 @@ namespace CUDA
 
 			checkCudaErrors(cudaFree(divergence));
 		}
+#endif // POISSON_SURFACE_RECONSTRUCTION
 
-		//// VisualDebugging를 사용해 메시를 그리기 위한 코드
-		//for (const auto& vertex : mesh)
-		//{
-		//	VD::AddCube("ExtractedMesh",
-		//		{ vertex.position.x, vertex.position.y, vertex.position.z },
-		//		{ 0.01f, 0.01f, 0.01f },
-		//		{ vertex.normal.x, vertex.normal.y, vertex.normal.z },
-		//		Color4::FromNormalized(vertex.color.x, vertex.color.y, vertex.color.z, 1.0f));
-		//}
+#ifdef SCREENED_POISSON_SURFACE_RECONSTRUCTION
+		{
+			dim3 threadsPerBlock(8, 8, 8);
+			dim3 blocksPerGrid(
+				(rg.internal->dimensions.x + threadsPerBlock.x - 1) / threadsPerBlock.x,
+				(rg.internal->dimensions.y + threadsPerBlock.y - 1) / threadsPerBlock.y,
+				(rg.internal->dimensions.z + threadsPerBlock.z - 1) / threadsPerBlock.z
+			);
 
-		t = Time::End(t, "Mesh Extraction and Visualization");
+			// 다이버전스 계산
+			float* divergence;
+			checkCudaErrors(cudaMallocManaged(&divergence, sizeof(float) * rg.internal->numberOfVoxels));
+			ComputeDivergence<Voxel> << <blocksPerGrid, threadsPerBlock >> > (rg.internal, divergence);
+			checkCudaErrors(cudaDeviceSynchronize());
+
+			// Screened Poisson 방정식 해결
+			float* potentialField;
+			float* inputField;  // 원 데이터 잠재 필드
+			float lambda = 0.1f;  // 스크리닝 강도
+
+			checkCudaErrors(cudaMallocManaged(&potentialField, sizeof(float) * rg.internal->numberOfVoxels));
+			checkCudaErrors(cudaMallocManaged(&inputField, sizeof(float) * rg.internal->numberOfVoxels));
+
+			SolveScreenedPoissonEquation(rg.internal, divergence, inputField, potentialField, lambda);
+
+			// 메시 추출
+			std::vector<Vertex> mesh = rg.ExtractMeshFromPotentialField(potentialField);
+			//std::vector<Vertex> mesh = rg.ExtractMesh();
+			//std::vector<Vertex> mesh = rg.ExtractMeshUsingDualContouring();
+
+			// 메시 시각화
+			for (size_t i = 0; i < mesh.size() / 3; i++)
+			{
+				auto& v0 = mesh[i * 3];
+				auto& v1 = mesh[i * 3 + 1];
+				auto& v2 = mesh[i * 3 + 2];
+
+				VD::AddTriangle("mesh",
+					{ v0.position.x, v0.position.y, v0.position.z },
+					{ v1.position.x, v1.position.y, v1.position.z },
+					{ v2.position.x, v2.position.y, v2.position.z },
+					Color4::FromNormalized(v0.color.x, v0.color.y, v0.color.z, 1.0f)
+				);
+			}
+
+			// 메모리 해제
+			checkCudaErrors(cudaFree(divergence));
+			checkCudaErrors(cudaFree(potentialField));
+			checkCudaErrors(cudaFree(inputField));
+		}
+#endif // 
+
+		{
+			std::vector<Vertex> mesh = rg.ExtractMesh();
+
+			printf("size of mesh : %llu\n", mesh.size());
+
+			for (size_t i = 0; i < mesh.size() / 3; i++)
+			{
+				auto v0 = mesh[i * 3];
+				auto v1 = mesh[i * 3 + 1];
+				auto v2 = mesh[i * 3 + 2];
+
+				VD::AddTriangle("mesh",
+					{ v0.position.x, v0.position.y, v0.position.z },
+					{ v1.position.x, v1.position.y, v1.position.z },
+					{ v2.position.x, v2.position.y, v2.position.z },
+					Color4::White);
+			}
+		}
 	}
+
 }

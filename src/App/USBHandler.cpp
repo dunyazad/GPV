@@ -7,17 +7,22 @@
 USBHandler::USBHandler(App* pApp)
 	: pApp(pApp), mainThread(nullptr), needToQuit(false)
 {
+	return;
+
 	if (hid_init() != 0) {
 		// Handle initialization error
 	}
 
 	USBDevice device;
-	device.deviceInfo = hid_enumerate(0x0483, 0x5750); // 0x0, 0x0 lists all devices
+	//device.deviceInfo = hid_enumerate(0x0483, 0x5750); // 0x0, 0x0 lists all devices
+	device.deviceInfo = hid_enumerate(0x256f, 0xc652); // 0x0, 0x0 lists all devices
+	//device.deviceInfo = hid_enumerate(0x0, 0x0); // 0x0, 0x0 lists all devices
 
 
 	struct hid_device_info* devs, * cur_dev;
 	//devs = hid_enumerate(0x0, 0x0); // 0x0, 0x0 lists all devices
-	devs = hid_enumerate(0x0483, 0x5750); // 0x0, 0x0 lists all devices
+	// devs = hid_enumerate(0x256f, 0xc652); // 0x0, 0x0 lists all devices
+	//devs = hid_enumerate(0x0483, 0x5750); // 0x0, 0x0 lists all devices
 	cur_dev = devs;
 	while (cur_dev) {
 		// Access device information

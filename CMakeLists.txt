@@ -20,7 +20,7 @@ find_package(VTK REQUIRED)
 include(${VTK_USE_FILE})
 find_package(CUDAToolkit REQUIRED)
 
-#set(CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH};C:\\Program Files (x86)\\hidapi\\lib\\cmake\\hidapi")
+set(CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH};C:\\Program Files (x86)\\hidapi\\lib\\cmake\\hidapi")
 
 enable_language(CUDA)
 
@@ -33,11 +33,11 @@ IF (WIN32)
 find_package(HDIAPI REQUIRED)
 include_directories(
 ${HDIAPI_INCLUDE_DIRS}
-"C:\\Program Files (x86)\\OpenVDB\\include"
+#"C:\\Program Files (x86)\\OpenVDB\\include"
 )
 link_libraries(
 ${HDIAPI_LIBRARIES}
-"C:\\Program Files (x86)\\OpenVDB\\lib\\openvdb.lib"
+#"C:\\Program Files (x86)\\OpenVDB\\lib\\openvdb.lib"
 )
 ENDIF()
 
@@ -110,8 +110,8 @@ target_include_directories(GPV PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     "External"
     "External/eigen"
-    "External/nanoflann"
-    "External/nanovdb"
+    #"External/nanoflann"
+    #"External/nanovdb"
     ${VTK_INCLUDE_DIRS}
     ${CUDAToolkit_INCLUDE_DIRS}
 )
@@ -121,8 +121,8 @@ target_include_directories(cuda_objects PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     "External"
     "External/eigen"
-    "External/nanoflann"
-    "External/nanovdb"
+    #"External/nanoflann"
+    #"External/nanovdb"
     ${VTK_INCLUDE_DIRS}
     ${CUDAToolkit_INCLUDE_DIRS}
 )
