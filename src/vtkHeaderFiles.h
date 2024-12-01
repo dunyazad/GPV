@@ -2,6 +2,7 @@
 
 #include <vtkVersion.h>
 #include <vtkNew.h>
+#include <vtkSmartPointer.h>
 #include <vtkFloatArray.h>
 #include <vtkDoubleArray.h>
 #include <vtkUnsignedCharArray.h>
@@ -32,6 +33,8 @@
 #include <vtkPlane.h>
 #include <vtkQuad.h>
 #include <vtkCellData.h>
+#include <vtkStructuredPoints.h>
+#include <vtkStructuredPointsWriter.h>
 #include <vtkUnstructuredGrid.h>
 #include <vtkPolyData.h>
 #include <vtkPolygon.h>

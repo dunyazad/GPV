@@ -1,5 +1,7 @@
 #include "RegularGrid.cuh"
 
+#include <vtkHeaderFiles.h>
+
 #include <App/Serialization.hpp>
 #include <App/Utility.h>
 
@@ -79,6 +81,9 @@ namespace CUDA
 	template<typename T>
 	__global__ void Kernel_SmoothTSDF(RegularGrid<T>::Internal* regularGrid, T* smoothedElements);
 
+	template<typename T>
+	__global__ void Kernel_ExtractMesh(typename RegularGrid<T>::Internal* regularGrid, Vertex* meshVertices, int* vertexCount);
+
 	__host__ __device__
 		uint3 GetIndex(const float3& gridCenter, uint3 gridDimensions, float voxelSize, const float3& position);
 
@@ -87,6 +92,67 @@ namespace CUDA
 
 	__host__ __device__
 		size_t GetFlatIndex(const uint3& index, const uint3& dimensions);
+	
+	// Declare the offsets array in constant memory
+	__device__ __constant__ uint3 offsets[8] = {
+		{0, 0, 0}, {1, 0, 0},
+		{1, 1, 0}, {0, 1, 0},
+		{0, 0, 1}, {1, 0, 1},
+		{1, 1, 1}, {0, 1, 1}
+	};
+
+	__host__ __device__
+		uint3 getCornerOffset(int cornerIndex)
+	{
+		return offsets[cornerIndex];
+	}
+
+	__host__ __device__
+		Vertex interpolateVertex(int edgeIndex, float3* positions, float* tsdfValues)
+	{
+		static const int edgeVertexMap[12][2] = {
+			{0, 1}, {1, 2}, {2, 3}, {3, 0},
+			{4, 5}, {5, 6}, {6, 7}, {7, 4},
+			{0, 4}, {1, 5}, {2, 6}, {3, 7}
+		};
+
+		const auto& edge = edgeVertexMap[edgeIndex];
+		int v0 = edge[0];
+		int v1 = edge[1];
+
+		float3 p0 = positions[v0];
+		float3 p1 = positions[v1];
+		float t = (0 - tsdfValues[v0]) / (tsdfValues[v1] - tsdfValues[v0]);
+
+		Vertex vertex;
+		vertex.position = make_float3(
+			p0.x + t * (p1.x - p0.x),
+			p0.y + t * (p1.y - p0.y),
+			p0.z + t * (p1.z - p0.z)
+		);
+
+		vertex.normal = normalize(make_float3(1.0f, 0.0f, 0.0f)); // Example default normal for device compatibility.
+		vertex.color = make_float3(0.5f, 0.5f, 0.5f); // Example default color.
+
+		return vertex;
+	}
+
+	//---------------------------------------------------------------------------------------------------
+	// Helper Functions ->
+	//---------------------------------------------------------------------------------------------------
+
+	Vertex ComputeOptimalVertex(const std::vector<float3>& edgeVertices, const std::vector<float3>& edgeNormals);
+
+	//uint3 getCornerOffset(int cornerIndex);
+
+	Vertex interpolateVertex(int edgeIndex, float3* positions, float* tsdfValues);
+
+	Vertex interpolateVertex_Potential(int edgeIndex, const std::array<float3, 8>& positions, const std::array<float, 8>& potentialValues);
+
+	//---------------------------------------------------------------------------------------------------
+	// <- Helper Functions
+	//---------------------------------------------------------------------------------------------------
+
 
 	template<typename T>
 	class RegularGrid
@@ -194,9 +260,9 @@ namespace CUDA
 					for (uint32_t x = 0; x < internal->dimensions.x - 1; ++x)
 					{
 						// 현재 그리드 셀의 8개 코너 정점 TSDF 값 가져오기
-						std::array<float, 8> tsdfValues;
-						std::array<float3, 8> positions;
-						std::array<float3, 8> normals;
+						float  tsdfValues[8];
+						float3 positions[8];
+						float3 normals[8];
 
 						for (int i = 0; i < 8; ++i)
 						{
@@ -271,6 +337,43 @@ namespace CUDA
 
 			return meshVertices;
 		}
+
+		std::vector<Vertex> ExtractMeshCUDA()
+		{
+			// Allocate device memory for vertices and vertex count
+			Vertex* d_meshVertices;
+			int* d_vertexCount;
+			int maxVertices = internal->numberOfVoxels * 15;  // An estimated upper limit for the number of vertices
+
+			checkCudaErrors(cudaMalloc(&d_meshVertices, sizeof(Vertex) * maxVertices));
+			checkCudaErrors(cudaMalloc(&d_vertexCount, sizeof(int)));
+			checkCudaErrors(cudaMemset(d_vertexCount, 0, sizeof(int)));
+
+			// Launch the CUDA kernel for mesh extraction
+			dim3 threadsPerBlock(8, 8, 8);
+			dim3 blocksPerGrid(
+				(internal->dimensions.x + threadsPerBlock.x - 1) / threadsPerBlock.x,
+				(internal->dimensions.y + threadsPerBlock.y - 1) / threadsPerBlock.y,
+				(internal->dimensions.z + threadsPerBlock.z - 1) / threadsPerBlock.z
+			);
+
+			Kernel_ExtractMesh<T> << <blocksPerGrid, threadsPerBlock >> > (internal, d_meshVertices, d_vertexCount);
+			checkCudaErrors(cudaDeviceSynchronize());
+
+			// Copy the resulting vertices back to the host
+			int h_vertexCount;
+			checkCudaErrors(cudaMemcpy(&h_vertexCount, d_vertexCount, sizeof(int), cudaMemcpyDeviceToHost));
+
+			std::vector<Vertex> meshVertices(h_vertexCount);
+			checkCudaErrors(cudaMemcpy(meshVertices.data(), d_meshVertices, sizeof(Vertex) * h_vertexCount, cudaMemcpyDeviceToHost));
+
+			// Free device memory
+			checkCudaErrors(cudaFree(d_meshVertices));
+			checkCudaErrors(cudaFree(d_vertexCount));
+
+			return meshVertices;
+		}
+
 
 		std::vector<Vertex> ExtractMeshUsingDualContouring() {
 			std::vector<Vertex> meshVertices;
@@ -361,93 +464,6 @@ namespace CUDA
 			return meshVertices;
 		}
 
-		// Helper function to compute the optimal vertex
-		Vertex ComputeOptimalVertex(const std::vector<float3>& edgeVertices, const std::vector<float3>& edgeNormals) {
-			// Use Hermite data (positions and normals) to minimize quadratic error
-			float3 optimalPosition = make_float3(0.0f, 0.0f, 0.0f);
-			float3 optimalNormal = make_float3(0.0f, 0.0f, 0.0f);
-
-			// Solve the quadratic error metric using Hermite data
-			for (size_t i = 0; i < edgeVertices.size(); ++i) {
-				optimalPosition.x += edgeVertices[i].x;
-				optimalPosition.y += edgeVertices[i].y;
-				optimalPosition.z += edgeVertices[i].z;
-
-				optimalNormal.x += edgeNormals[i].x;
-				optimalNormal.y += edgeNormals[i].y;
-				optimalNormal.z += edgeNormals[i].z;
-			}
-
-			optimalPosition.x /= edgeVertices.size();
-			optimalPosition.y /= edgeVertices.size();
-			optimalPosition.z /= edgeVertices.size();
-
-			optimalNormal = normalize(optimalNormal);
-
-			// Return the optimal vertex
-			Vertex vertex;
-			vertex.position = optimalPosition;
-			vertex.normal = optimalNormal;
-			vertex.color = make_float3(0.5f, 0.5f, 0.5f); // Set a default color or compute based on some criteria.
-
-			return vertex;
-		}
-
-
-		// 각 코너의 오프셋을 구하는 함수 (Marching Cubes용)
-		uint3 getCornerOffset(int cornerIndex)
-		{
-			static const uint3 offsets[8] = {
-				make_uint3(0, 0, 0), make_uint3(1, 0, 0),
-				make_uint3(1, 1, 0), make_uint3(0, 1, 0),
-				make_uint3(0, 0, 1), make_uint3(1, 0, 1),
-				make_uint3(1, 1, 1), make_uint3(0, 1, 1)
-			};
-			return offsets[cornerIndex];
-		}
-
-		// 두 정점 사이의 보간된 정점을 생성하는 함수
-		Vertex interpolateVertex(int edgeIndex, const std::array<float3, 8>& positions, const std::array<float, 8>& tsdfValues)
-		{
-			static const int edgeVertexMap[12][2] = {
-				{0, 1}, {1, 2}, {2, 3}, {3, 0},
-				{4, 5}, {5, 6}, {6, 7}, {7, 4},
-				{0, 4}, {1, 5}, {2, 6}, {3, 7}
-			};
-
-			const auto& edge = edgeVertexMap[edgeIndex];
-			int v0 = edge[0];
-			int v1 = edge[1];
-
-			float3 p0 = positions[v0];
-			float3 p1 = positions[v1];
-			float t = (0 - tsdfValues[v0]) / (tsdfValues[v1] - tsdfValues[v0]);
-
-			Vertex vertex;
-			vertex.position = make_float3(
-				p0.x + t * (p1.x - p0.x),
-				p0.y + t * (p1.y - p0.y),
-				p0.z + t * (p1.z - p0.z)
-			);
-
-			vertex.normal = normalize(interpolateNormal(v0, v1));
-			vertex.color = make_float3(0.5f, 0.5f, 0.5f); // 컬러는 임시로 설정, 필요시 보간할 수 있음
-
-			return vertex;
-		}
-
-		// 두 정점 사이의 노말을 보간하는 함수
-		float3 interpolateNormal(int v0, int v1)
-		{
-			Voxel voxel0 = internal->elements[v0];
-			Voxel voxel1 = internal->elements[v1];
-			return make_float3(
-				(voxel0.normal.x + voxel1.normal.x) * 0.5f,
-				(voxel0.normal.y + voxel1.normal.y) * 0.5f,
-				(voxel0.normal.z + voxel1.normal.z) * 0.5f
-			);
-		}
-
 		// Divergence 기반으로 메시를 추출하는 함수 추가
 		// 기존의 ExtractMeshFromPotentialField 코드
 		std::vector<Vertex> ExtractMeshFromPotentialField(float* potentialField) {
@@ -508,6 +524,48 @@ namespace CUDA
 			return meshVertices;
 		}
 
+		// 두 정점 사이의 노말을 보간하는 함수
+		float3 interpolateNormal(int v0, int v1)
+		{
+			Voxel voxel0 = internal->elements[v0];
+			Voxel voxel1 = internal->elements[v1];
+			return make_float3(
+				(voxel0.normal.x + voxel1.normal.x) * 0.5f,
+				(voxel0.normal.y + voxel1.normal.y) * 0.5f,
+				(voxel0.normal.z + voxel1.normal.z) * 0.5f
+			);
+		}
+
+		// 두 정점 사이의 보간된 정점을 생성하는 함수
+		Vertex interpolateVertex(int edgeIndex, float3* positions, float* tsdfValues)
+		{
+			static const int edgeVertexMap[12][2] = {
+				{0, 1}, {1, 2}, {2, 3}, {3, 0},
+				{4, 5}, {5, 6}, {6, 7}, {7, 4},
+				{0, 4}, {1, 5}, {2, 6}, {3, 7}
+			};
+
+			const auto& edge = edgeVertexMap[edgeIndex];
+			int v0 = edge[0];
+			int v1 = edge[1];
+
+			float3 p0 = positions[v0];
+			float3 p1 = positions[v1];
+			float t = (0 - tsdfValues[v0]) / (tsdfValues[v1] - tsdfValues[v0]);
+
+			Vertex vertex;
+			vertex.position = make_float3(
+				p0.x + t * (p1.x - p0.x),
+				p0.y + t * (p1.y - p0.y),
+				p0.z + t * (p1.z - p0.z)
+			);
+
+			vertex.normal = normalize(interpolateNormal(v0, v1));
+			vertex.color = make_float3(0.5f, 0.5f, 0.5f); // 컬러는 임시로 설정, 필요시 보간할 수 있음
+
+			return vertex;
+		}
+
 		// 두 정점 사이의 보간된 정점을 생성하는 함수 (포텐셜 필드 보간)
 		Vertex interpolateVertex_Potential(int edgeIndex, const std::array<float3, 8>& positions, const std::array<float, 8>& potentialValues)
 		{
@@ -556,6 +614,54 @@ namespace CUDA
 
 		Internal* internal;
 	};
+
+	//---------------------------------------------------------------------------------------------------
+	// Helper Functions
+	//---------------------------------------------------------------------------------------------------
+
+	// Helper function to compute the optimal vertex
+	Vertex ComputeOptimalVertex(const std::vector<float3>& edgeVertices, const std::vector<float3>& edgeNormals) {
+		// Use Hermite data (positions and normals) to minimize quadratic error
+		float3 optimalPosition = make_float3(0.0f, 0.0f, 0.0f);
+		float3 optimalNormal = make_float3(0.0f, 0.0f, 0.0f);
+
+		// Solve the quadratic error metric using Hermite data
+		for (size_t i = 0; i < edgeVertices.size(); ++i) {
+			optimalPosition.x += edgeVertices[i].x;
+			optimalPosition.y += edgeVertices[i].y;
+			optimalPosition.z += edgeVertices[i].z;
+
+			optimalNormal.x += edgeNormals[i].x;
+			optimalNormal.y += edgeNormals[i].y;
+			optimalNormal.z += edgeNormals[i].z;
+		}
+
+		optimalPosition.x /= edgeVertices.size();
+		optimalPosition.y /= edgeVertices.size();
+		optimalPosition.z /= edgeVertices.size();
+
+		optimalNormal = normalize(optimalNormal);
+
+		// Return the optimal vertex
+		Vertex vertex;
+		vertex.position = optimalPosition;
+		vertex.normal = optimalNormal;
+		vertex.color = make_float3(0.5f, 0.5f, 0.5f); // Set a default color or compute based on some criteria.
+
+		return vertex;
+	}
+
+	// 각 코너의 오프셋을 구하는 함수 (Marching Cubes용)
+	/*uint3 getCornerOffset(int cornerIndex)
+	{
+		static const uint3 offsets[8] = {
+			make_uint3(0, 0, 0), make_uint3(1, 0, 0),
+			make_uint3(1, 1, 0), make_uint3(0, 1, 0),
+			make_uint3(0, 0, 1), make_uint3(1, 0, 1),
+			make_uint3(1, 1, 1), make_uint3(0, 1, 1)
+		};
+		return offsets[cornerIndex];
+	}*/
 
 	//---------------------------------------------------------------------------------------------------
 	// Kernel Functions
@@ -830,7 +936,7 @@ namespace CUDA
 		auto currentIndex = GetIndex(regularGrid->center, regularGrid->dimensions, regularGrid->voxelSize, p);
 		if (currentIndex.x == UINT_MAX || currentIndex.y == UINT_MAX || currentIndex.z == UINT_MAX) return;
 
-		int offset = 1;
+		int offset = 2;
 		for (uint32_t nzi = currentIndex.z - offset; nzi < currentIndex.z + offset; nzi++)
 		{
 			if (currentIndex.z < offset || nzi >= regularGrid->dimensions.z) continue;
@@ -865,6 +971,8 @@ namespace CUDA
 					// Weighted average for TSDF
 					float updatedWeight = fminf(previousWeight + newWeight, regularGrid->maxWeight); // 최대 가중치 제한
 					float updatedTsdf = (previousTsdf * previousWeight + tsdfValue * newWeight) / updatedWeight;
+
+					updatedTsdf = fmax(-regularGrid->truncationDistance, fmin(regularGrid->truncationDistance, updatedTsdf));
 
 					voxel->tsdfValue = updatedTsdf;
 					voxel->weight = updatedWeight;
@@ -1023,6 +1131,66 @@ namespace CUDA
 		smoothedElements[flatIndex] = smoothedVoxel;
 	}
 
+	template<typename T>
+	__global__ void Kernel_ExtractMesh(typename RegularGrid<T>::Internal* regularGrid, Vertex* meshVertices, int* vertexCount)
+	{
+		size_t threadX = blockIdx.x * blockDim.x + threadIdx.x;
+		size_t threadY = blockIdx.y * blockDim.y + threadIdx.y;
+		size_t threadZ = blockIdx.z * blockDim.z + threadIdx.z;
+
+		if (threadX >= regularGrid->dimensions.x - 1 ||
+			threadY >= regularGrid->dimensions.y - 1 ||
+			threadZ >= regularGrid->dimensions.z - 1) return;
+
+		uint3 currentIndex = make_uint3(threadX, threadY, threadZ);
+		size_t flatIndex = GetFlatIndex(currentIndex, regularGrid->dimensions);
+
+		float tsdfValues[8];
+		float3 positions[8];
+		float3 normals[8];
+
+		for (int i = 0; i < 8; ++i)
+		{
+			uint3 cornerOffset = getCornerOffset(i);
+			uint3 cornerIndex = make_uint3(currentIndex.x + cornerOffset.x, currentIndex.y + cornerOffset.y, currentIndex.z + cornerOffset.z);
+			size_t cornerFlatIndex = GetFlatIndex(cornerIndex, regularGrid->dimensions);
+
+			tsdfValues[i] = regularGrid->elements[cornerFlatIndex].tsdfValue;
+			positions[i] = GetPosition(regularGrid->center, regularGrid->dimensions, regularGrid->voxelSize, cornerIndex);
+			normals[i] = regularGrid->elements[cornerFlatIndex].normal;
+		}
+
+		int cubeIndex = 0;
+		for (int i = 0; i < 8; ++i)
+		{
+			if (tsdfValues[i] < 0.0f)
+			{
+				cubeIndex |= (1 << i);
+			}
+		}
+
+		if (cubeIndex == 0 || cubeIndex == 255)
+		{
+			return;
+		}
+
+		for (int i = 0; triTable[cubeIndex][i] != -1; i += 3)
+		{
+			int edgeA = triTable[cubeIndex][i];
+			int edgeB = triTable[cubeIndex][i + 1];
+			int edgeC = triTable[cubeIndex][i + 2];
+
+			Vertex vertexA = interpolateVertex(edgeA, positions, tsdfValues);
+			Vertex vertexB = interpolateVertex(edgeB, positions, tsdfValues);
+			Vertex vertexC = interpolateVertex(edgeC, positions, tsdfValues);
+
+			int idx = atomicAdd(vertexCount, 3);
+			meshVertices[idx] = vertexA;
+			meshVertices[idx + 1] = vertexB;
+			meshVertices[idx + 2] = vertexC;
+		}
+	}
+	
 	//---------------------------------------------------------------------------------------------------
 	// Utility Functions
 	//---------------------------------------------------------------------------------------------------
@@ -1084,6 +1252,46 @@ namespace CUDA
 		return index.z * dimensions.x * dimensions.y + index.y * dimensions.x + index.x;
 	}
 
+	void SaveRegularGridToVTK(const CUDA::RegularGrid<CUDA::Voxel>& rg, const std::string& filename) {
+		auto& internal = *(rg.internal);
+
+		// 파일 열기
+		std::ofstream vtkFile(filename);
+		if (!vtkFile.is_open()) {
+			std::cerr << "Error: Cannot open file " << filename << std::endl;
+			return;
+		}
+
+		// VTK 헤더 작성
+		vtkFile << "# vtk DataFile Version 4.2\n";
+		vtkFile << "vtk output\n";
+		vtkFile << "ASCII\n";
+		vtkFile << "DATASET STRUCTURED_POINTS\n";
+		vtkFile << "DIMENSIONS " << internal.dimensions.x << " "
+			<< internal.dimensions.y << " " << internal.dimensions.z << "\n";
+		vtkFile << "SPACING " << internal.voxelSize << " "
+			<< internal.voxelSize << " " << internal.voxelSize << "\n";
+		vtkFile << "ORIGIN 0.0 0.0 0.0\n";
+		vtkFile << "POINT_DATA " << (internal.dimensions.x * internal.dimensions.y * internal.dimensions.z) << "\n";
+		vtkFile << "SCALARS TSDF float 1\n";
+		vtkFile << "LOOKUP_TABLE default\n";
+
+		// TSDF 값 저장
+		for (uint32_t z = 0; z < internal.dimensions.z; ++z) {
+			for (uint32_t y = 0; y < internal.dimensions.y; ++y) {
+				for (uint32_t x = 0; x < internal.dimensions.x; ++x) {
+					size_t flatIndex = z * internal.dimensions.x * internal.dimensions.y
+						+ y * internal.dimensions.x + x;
+					vtkFile << internal.elements[flatIndex].tsdfValue << "\n";
+				}
+			}
+		}
+
+		vtkFile.close();
+		std::cout << "VTK file saved to " << filename << std::endl;
+	}
+
+
 	////////////////////////////////////////////////////////////////////////////////////
 
 	void TestRegularGrid()
@@ -1103,7 +1311,7 @@ namespace CUDA
 
 			stringstream ss;
 			//ss << "C:\\Resources\\3D\\PLY\\Complete\\Lower_pointcloud.ply";
-			ss << "D:\\Resources\\3D\\PLY\\Lower_pointcloud.ply";
+			ss << "D:\\Resources\\3D\\PLY\\Lower_pointcloud_crop.ply";
 
 			PLYFormat ply;
 			ply.Deserialize(ss.str());
@@ -1111,6 +1319,11 @@ namespace CUDA
 			cout << "ply max : " << ply.GetAABB().max().transpose() << endl;
 
 			t = Time::End(t, "Load ply");
+
+			//for (size_t i = 0; i < ply.GetNumberOfPoints() / 3; i++)
+			//{
+
+			//}
 
 			PatchBuffers patchBuffers(ply.GetPoints().size() / 3, 1);
 			patchBuffers.FromPLYFile(ply);
@@ -1121,10 +1334,12 @@ namespace CUDA
 
 			t = Time::End(t, "Insert using PatchBuffers");
 
-			rg.SmoothTSDF();
+			/*rg.SmoothTSDF();
 
-			t = Time::End(t, "SmoothTSDF");
+			t = Time::End(t, "SmoothTSDF");*/
 		}
+
+		SaveRegularGridToVTK(rg, "D:\\Resources\\3D\\VTK\\rg.vtk");
 
 #ifdef MARCHING_CUBES
 		{
@@ -1371,7 +1586,7 @@ namespace CUDA
 #endif // 
 
 		{
-			std::vector<Vertex> mesh = rg.ExtractMesh();
+			std::vector<Vertex> mesh = rg.ExtractMeshCUDA();
 
 			printf("size of mesh : %llu\n", mesh.size());
 

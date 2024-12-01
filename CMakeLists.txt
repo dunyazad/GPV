@@ -134,6 +134,10 @@ target_link_libraries(GPV
     CUDA::cusolver CUDA::cusparse
 )
 
+target_link_libraries(cuda_objects PRIVATE
+    ${VTK_LIBRARIES}
+ )
+
 if(MSVC)
     set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT GPV)
     target_compile_options(GPV PRIVATE /bigobj)

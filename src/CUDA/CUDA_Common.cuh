@@ -195,6 +195,7 @@ inline float3 normalize(const float3& a) {
     }
 }
 
+__device__ __constant__
 const int edgeTable[256] = {
 		0x0  , 0x109, 0x203, 0x30a, 0x406, 0x50f, 0x605, 0x70c,
 		0x80c, 0x905, 0xa0f, 0xb06, 0xc0a, 0xd03, 0xe09, 0xf00,
@@ -229,6 +230,8 @@ const int edgeTable[256] = {
 		0xf00, 0xe09, 0xd03, 0xc0a, 0xb06, 0xa0f, 0x905, 0x80c,
 		0x70c, 0x605, 0x50f, 0x406, 0x30a, 0x203, 0x109, 0x0 };
 // 모서리와 정점을 연결하는 맵핑 배열 (12개의 모서리와 각 모서리에 연결된 두 정점)
+
+__device__ __constant__
 const int edgeVertexMap[12][2] = {
     {0, 1},  // Edge 0 connects Vertex 0 → Vertex 1
     {1, 2},  // Edge 1 connects Vertex 1 → Vertex 2
@@ -243,6 +246,8 @@ const int edgeVertexMap[12][2] = {
     {2, 6},  // Edge 10 connects Vertex 2 → Vertex 6
     {3, 7}   // Edge 11 connects Vertex 3 → Vertex 7
 };
+
+__device__ __constant__
 const int triTable[256][16] =
 { {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
 {0, 8, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
