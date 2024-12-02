@@ -21,6 +21,9 @@ namespace CUDA
 		float3* inputNormals;
 		float3* inputColors;
 
+		void Initalize();
+		void Terminate();
+
 		void Clear();
 
 		void FromPLYFile(const PLYFormat& ply);

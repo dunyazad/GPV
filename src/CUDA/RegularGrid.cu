@@ -14,24 +14,29 @@ namespace CUDA
 	PatchBuffers::PatchBuffers(int width, int height)
 		: width(width), height(height)
 	{
-		checkCudaErrors(cudaMallocManaged(&inputPoints, sizeof(float3) * width * height));
-		checkCudaErrors(cudaMallocManaged(&inputNormals, sizeof(float3) * width * height));
-		checkCudaErrors(cudaMallocManaged(&inputColors, sizeof(float3) * width * height));
+		checkCudaErrors(cudaMalloc(&inputPoints, sizeof(float3) * width * height));
+		checkCudaErrors(cudaMalloc(&inputNormals, sizeof(float3) * width * height));
+		checkCudaErrors(cudaMalloc(&inputColors, sizeof(float3) * width * height));
 	}
 
 	PatchBuffers::~PatchBuffers()
 	{
-		checkCudaErrors(cudaFree(inputPoints));
-		checkCudaErrors(cudaFree(inputNormals));
-		checkCudaErrors(cudaFree(inputColors));
+		if (nullptr != inputPoints)
+		{
+			checkCudaErrors(cudaFree(inputPoints));
+			inputPoints = nullptr;
+		}
+		if (nullptr != inputNormals)
+		{
+			checkCudaErrors(cudaFree(inputNormals));
+			inputNormals = nullptr;
+		}
+		if (nullptr != inputColors)
+		{
+			checkCudaErrors(cudaFree(inputColors));
+			inputColors = nullptr;
+		}
 	}
-
-	int width;
-	int height;
-	size_t numberOfInputPoints;
-	float3* inputPoints;
-	float3* inputNormals;
-	float3* inputColors;
 
 	void PatchBuffers::Clear()
 	{
@@ -49,6 +54,7 @@ namespace CUDA
 		checkCudaErrors(cudaMemcpy(inputPoints, ply.GetPoints().data(), sizeof(float3) * numberOfInputPoints, cudaMemcpyHostToDevice));
 		checkCudaErrors(cudaMemcpy(inputNormals, ply.GetNormals().data(), sizeof(float3) * numberOfInputPoints, cudaMemcpyHostToDevice));
 		checkCudaErrors(cudaMemcpy(inputColors, ply.GetColors().data(), sizeof(float3) * numberOfInputPoints, cudaMemcpyHostToDevice));
+		checkCudaErrors(cudaDeviceSynchronize());
 	}
 #pragma endregion
 
@@ -56,7 +62,7 @@ namespace CUDA
 	__global__ void Kernel_Clear(RegularGrid<T>::Internal* regularGrid);
 
 	template<typename T>
-	__global__ void Kernel_Integrate(RegularGrid<T>::Internal* regularGrid, PatchBuffers);
+	__global__ void Kernel_Integrate(RegularGrid<T>::Internal* regularGrid, size_t numberOfInputPoints, float3* inputPoints, float3* inputNormals, float3* inputColors);
 
 	template<typename T>
 	__global__ void Kernel_SmoothTSDF(RegularGrid<T>::Internal* regularGrid, T* smoothedElements);
@@ -204,14 +210,14 @@ namespace CUDA
 			nvtxRangePop();
 		}
 
-		void Integrate(const PatchBuffers& patchBuffers)
+		void Integrate(size_t numberOfInputPoints, float3* inputPoints, float3* inputNormals, float3* inputColors)
 		{
 			nvtxRangePushA("Insert");
 
 			unsigned int threadblocksize = 512;
-			int gridsize = ((uint32_t)patchBuffers.numberOfInputPoints + threadblocksize - 1) / threadblocksize;
+			int gridsize = ((uint32_t)numberOfInputPoints + threadblocksize - 1) / threadblocksize;
 
-			Kernel_Integrate<T> << <gridsize, threadblocksize >> > (internal, patchBuffers);
+			Kernel_Integrate<T> << <gridsize, threadblocksize >> > (internal, numberOfInputPoints, inputPoints, inputNormals, inputColors);
 
 			checkCudaErrors(cudaDeviceSynchronize());
 
@@ -927,21 +933,21 @@ namespace CUDA
 	}
 
 	template<typename T>
-	__global__ void Kernel_Integrate(RegularGrid<T>::Internal* regularGrid, PatchBuffers patchBuffers)
+	__global__ void Kernel_Integrate(RegularGrid<T>::Internal* regularGrid, size_t numberOfInputPoints, float3* inputPoints, float3* inputNormals, float3* inputColors)
 	{
 		unsigned int threadid = blockDim.x * blockIdx.x + threadIdx.x;
-		if (threadid >= patchBuffers.numberOfInputPoints) return;
+		if (threadid >= numberOfInputPoints) return;
 
-		float3 p = patchBuffers.inputPoints[threadid];
-		float3 color = patchBuffers.inputColors[threadid];
-		float3 normal = patchBuffers.inputNormals[threadid];
+		float3 p = inputPoints[threadid];
+		float3 color = inputColors[threadid];
+		float3 normal = inputNormals[threadid];
 
 		//if (normal.z < 0) return;
 
 		auto currentIndex = GetIndex(regularGrid->center, regularGrid->dimensions, regularGrid->voxelSize, p);
 		if (currentIndex.x == UINT_MAX || currentIndex.y == UINT_MAX || currentIndex.z == UINT_MAX) return;
 
-		int offset = 2;
+		int offset = 1;
 		for (uint32_t nzi = currentIndex.z - offset; nzi < currentIndex.z + offset; nzi++)
 		{
 			if (currentIndex.z < offset || nzi >= regularGrid->dimensions.z) continue;
@@ -956,6 +962,8 @@ namespace CUDA
 
 					size_t index = nzi * (regularGrid->dimensions.x * regularGrid->dimensions.y) +
 						nyi * regularGrid->dimensions.x + nxi;
+
+					//printf("index : %llu\n", index);
 
 					float3 voxelCenter = GetPosition(regularGrid->center, regularGrid->dimensions, regularGrid->voxelSize, make_uint3(nxi, nyi, nzi));
 
@@ -1250,9 +1258,9 @@ namespace CUDA
 
 		// Calculate the position of the given voxel using the provided index
 		float3 position = make_float3(
-			gridMin.x + (float)index.x * voxelSize + voxelSize * 0.5f,
-			gridMin.y + (float)index.y * voxelSize + voxelSize * 0.5f,
-			gridMin.z + (float)index.z * voxelSize + voxelSize * 0.5f
+			gridMin.x + (float)index.x * voxelSize/* + voxelSize * 0.5f*/,
+			gridMin.y + (float)index.y * voxelSize/* + voxelSize * 0.5f*/,
+			gridMin.z + (float)index.z * voxelSize/* + voxelSize * 0.5f*/
 		);
 
 		return position;
@@ -1347,7 +1355,11 @@ namespace CUDA
 
 			t = Time::End(t, "Copy data to device");
 
-			rg.Integrate(patchBuffers);
+			rg.Integrate(
+				patchBuffers.numberOfInputPoints,
+				patchBuffers.inputPoints,
+				patchBuffers.inputNormals,
+				patchBuffers.inputColors);
 
 			t = Time::End(t, "Insert using PatchBuffers");
 
