@@ -388,7 +388,8 @@ bool AppStartCallback(App* pApp)
 	//AppStartCallback_Simple(pApp);
 
 	//AppStartCallback_Octree(pApp);
-	AppStartCallback_RegularGrid(pApp);
+	//AppStartCallback_RegularGrid(pApp);
+	AppStartCallback_SVO(pApp);
 
 	return true;
 }

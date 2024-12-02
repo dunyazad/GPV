@@ -46,8 +46,8 @@ namespace CUDA
 
 	struct ExtractionEdge
 	{
-		uint32_t startVoxelIndex = UINT32_MAX;
-		uint32_t endVoxelIndex = UINT32_MAX;
+		uint3 startVoxelIndex;
+		uint3 endVoxelIndex;
 		unsigned char edgeDirection = 0;
 		bool zeroCrossing = false;
 		//Eigen::Vector3f zeroCrossingPoint = Eigen::Vector3f(FLT_MAX, FLT_MAX, FLT_MAX);
@@ -67,7 +67,7 @@ namespace CUDA
 		uint32_t globalIndexY = UINT32_MAX;
 		uint32_t globalIndexZ = UINT32_MAX;
 
-		Eigen::Vector3f position = Eigen::Vector3f(FLT_MAX, FLT_MAX, FLT_MAX);
+		float3 position = make_float3(FLT_MAX, FLT_MAX, FLT_MAX);
 		float value = FLT_MAX;
 
 		uint32_t edgeIndexX = UINT32_MAX;

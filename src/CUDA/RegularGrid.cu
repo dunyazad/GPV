@@ -7,7 +7,6 @@
 #include <Debugging/VisualDebugging.h>
 using VD = VisualDebugging;
 
-
 namespace CUDA
 {
 #pragma region PatchBuffers
@@ -68,7 +67,18 @@ namespace CUDA
 	__global__ void Kernel_SmoothTSDF(RegularGrid<T>::Internal* regularGrid, T* smoothedElements);
 
 	template<typename T>
-	__global__ void Kernel_ExtractMesh(typename RegularGrid<T>::Internal* regularGrid, Vertex* meshVertices, int* vertexCount);
+	__global__ void Kernel_ExtractMesh(RegularGrid<T>::Internal* regularGrid, Vertex* meshVertices, int* vertexCount);
+
+	template<typename T>
+	__global__ void Kernel_PopulateExtractionVoxels(
+		RegularGrid<T>::Internal* regularGrid,
+		uint3* validVoxelIndices, unsigned int* numberOfValidVoxels,
+		ExtractionVoxel* extractionVoxels, unsigned int* numberOfExtractionVoxels,
+		ExtractionEdge* extractionEdges, unsigned int* numberOfExtractionEdges);
+
+	template<typename T>
+	__global__ void Kernel_GetValidVoxelIndices(
+		RegularGrid<T>::Internal* regularGrid, uint3* indices, unsigned int* numberOfIndices);
 
 	__host__ __device__
 		uint3 GetIndex(const float3& gridCenter, uint3 gridDimensions, float voxelSize, const float3& position);
@@ -78,7 +88,7 @@ namespace CUDA
 
 	__host__ __device__
 		size_t GetFlatIndex(const uint3& index, const uint3& dimensions);
-	
+
 	// Declare the offsets array in constant memory
 	__device__ __constant__ uint3 offsets[8] = {
 		{0, 0, 0}, {1, 0, 0},
@@ -224,6 +234,102 @@ namespace CUDA
 			nvtxRangePop();
 		}
 
+		tuple<uint3*, unsigned int*> GetValidVoxelIndices()
+		{
+			nvtxRangePushA("GetValidVoxelIndices");
+
+			uint3* validVoxelIndices;
+			checkCudaErrors(cudaMalloc(&validVoxelIndices, sizeof(uint3) * h_internal.numberOfVoxels));
+
+			unsigned int* numberOfValidVoxels;
+			checkCudaErrors(cudaMalloc(&numberOfValidVoxels, sizeof(unsigned int)));
+			checkCudaErrors(cudaMemset(numberOfValidVoxels, 0, sizeof(unsigned int)));
+
+			dim3 threadsPerBlock(8, 8, 8);  // 8x8x8 threads per block
+			dim3 blocksPerGrid(
+				(h_internal.dimensions.x + threadsPerBlock.x - 1) / threadsPerBlock.x,
+				(h_internal.dimensions.y + threadsPerBlock.y - 1) / threadsPerBlock.y,
+				(h_internal.dimensions.z + threadsPerBlock.z - 1) / threadsPerBlock.z
+			);
+
+			Kernel_GetValidVoxelIndices<T> << <blocksPerGrid, threadsPerBlock >> > (internal, validVoxelIndices, numberOfValidVoxels);
+
+			checkCudaErrors(cudaDeviceSynchronize());
+
+			nvtxRangePop();
+
+			return { validVoxelIndices, numberOfValidVoxels };
+		}
+
+		//void PopulateExtractionVoxels()
+		//{
+		//	ExtractionVoxel* extractionVoxels;
+		//	checkCudaErrors(cudaMalloc(&extractionVoxels, sizeof(ExtractionVoxel) * h_internal.numberOfVoxels));
+		//	unsigned int* numberOfExtractionVoxels;
+		//	checkCudaErrors(cudaMalloc(&numberOfExtractionVoxels, sizeof(unsigned int)));
+		//	
+		//	ExtractionEdge* extractionEdges;
+		//	checkCudaErrors(cudaMalloc(&extractionEdges, sizeof(ExtractionEdge) * h_internal.numberOfVoxels * 3));
+		//	unsigned int* numberOfExtractionEdges;
+		//	checkCudaErrors(cudaMalloc(&numberOfExtractionEdges, sizeof(unsigned int)));
+
+		//	nvtxRangePushA("PopulateExtractionVoxels");
+
+		//	// Set up the CUDA kernel launch parameters
+		//	dim3 threadsPerBlock(8, 8, 8); // You can optimize these values
+		//	dim3 blocksPerGrid(
+		//		(h_internal.dimensions.x + threadsPerBlock.x - 1) / threadsPerBlock.x,
+		//		(h_internal.dimensions.y + threadsPerBlock.y - 1) / threadsPerBlock.y,
+		//		(h_internal.dimensions.z + threadsPerBlock.z - 1) / threadsPerBlock.z
+		//	);
+
+		//	Kernel_PopulateExtractionVoxels<T> << <blocksPerGrid, threadsPerBlock >> > (
+		//		internal,
+		//		extractionVoxels,
+		//		numberOfExtractionVoxels,
+		//		extractionEdges,
+		//		numberOfExtractionEdges);
+
+		//	checkCudaErrors(cudaDeviceSynchronize());
+
+		//	nvtxRangePop();
+		//}
+
+		void PopulateExtractionVoxels()
+		{
+			auto [validVoxelIndices, numberOfValidVoxels] = GetValidVoxelIndices();
+
+			unsigned int h_numberOfValidVoxels;
+			checkCudaErrors(cudaMemcpy(&h_numberOfValidVoxels, numberOfValidVoxels, sizeof(unsigned int), cudaMemcpyDeviceToHost));
+
+			ExtractionVoxel* extractionVoxels;
+			checkCudaErrors(cudaMalloc(&extractionVoxels, sizeof(ExtractionVoxel) * h_numberOfValidVoxels));
+			unsigned int* numberOfExtractionVoxels;
+			checkCudaErrors(cudaMalloc(&numberOfExtractionVoxels, sizeof(unsigned int)));
+
+			ExtractionEdge* extractionEdges;
+			checkCudaErrors(cudaMalloc(&extractionEdges, sizeof(ExtractionEdge) * h_numberOfValidVoxels * 3));
+			unsigned int* numberOfExtractionEdges;
+			checkCudaErrors(cudaMalloc(&numberOfExtractionEdges, sizeof(unsigned int)));
+
+			nvtxRangePushA("PopulateExtractionVoxels");
+
+			unsigned int threadblocksize = 512;
+			int gridsize = ((uint32_t)h_numberOfValidVoxels + threadblocksize - 1) / threadblocksize;
+
+			Kernel_PopulateExtractionVoxels<T> << <gridsize, threadblocksize >> > (
+				internal,
+				validVoxelIndices, numberOfValidVoxels,
+				extractionVoxels,
+				numberOfExtractionVoxels,
+				extractionEdges,
+				numberOfExtractionEdges);
+
+			checkCudaErrors(cudaDeviceSynchronize());
+
+			nvtxRangePop();
+		}
+
 		// Function to launch the smoothing kernel and apply smoothing to the entire TSDF grid
 		void SmoothTSDF()
 		{
@@ -234,9 +340,9 @@ namespace CUDA
 			// Set up the CUDA kernel launch parameters
 			dim3 threadsPerBlock(8, 8, 8); // You can optimize these values
 			dim3 blocksPerGrid(
-				(internal->dimensions.x + threadsPerBlock.x - 1) / threadsPerBlock.x,
-				(internal->dimensions.y + threadsPerBlock.y - 1) / threadsPerBlock.y,
-				(internal->dimensions.z + threadsPerBlock.z - 1) / threadsPerBlock.z
+				(h_internal.dimensions.x + threadsPerBlock.x - 1) / threadsPerBlock.x,
+				(h_internal.dimensions.y + threadsPerBlock.y - 1) / threadsPerBlock.y,
+				(h_internal.dimensions.z + threadsPerBlock.z - 1) / threadsPerBlock.z
 			);
 
 			// Launch the smoothing kernel
@@ -363,7 +469,8 @@ namespace CUDA
 
 			nvtxRangePushA("ExtractMeshCUDA_Kernel");
 
-			Kernel_ExtractMesh<T> << <blocksPerGrid, threadsPerBlock >> > (internal, d_meshVertices, d_vertexCount);
+			Kernel_ExtractMesh<T> <<<blocksPerGrid, threadsPerBlock>>> (internal, d_meshVertices, d_vertexCount);
+
 			checkCudaErrors(cudaDeviceSynchronize());
 
 			nvtxRangePop();
@@ -1145,7 +1252,7 @@ namespace CUDA
 	}
 
 	template<typename T>
-	__global__ void Kernel_ExtractMesh(typename RegularGrid<T>::Internal* regularGrid, Vertex* meshVertices, int* vertexCount)
+	__global__ void Kernel_ExtractMesh(RegularGrid<T>::Internal* regularGrid, Vertex* meshVertices, int* vertexCount)
 	{
 		size_t threadX = blockIdx.x * blockDim.x + threadIdx.x;
 		size_t threadY = blockIdx.y * blockDim.y + threadIdx.y;
@@ -1210,10 +1317,180 @@ namespace CUDA
 			meshVertices[idx + 2] = vertexC;
 		}
 	}
-	
+
 	//---------------------------------------------------------------------------------------------------
 	// Utility Functions
 	//---------------------------------------------------------------------------------------------------
+
+	template<typename T>
+	__global__ void Kernel_PopulateExtractionVoxels(
+		RegularGrid<T>::Internal* regularGrid,
+		uint3* validVoxelIndices, unsigned int* numberOfValidVoxels,
+		ExtractionVoxel* extractionVoxels, unsigned int* numberOfExtractionVoxels, ExtractionEdge* extractionEdges, unsigned int* numberOfExtractionEdges)
+	{
+		unsigned int threadid = blockIdx.x * blockDim.x + threadIdx.x;
+		if (threadid > *numberOfValidVoxels - 1) return;
+
+		uint3 index = validVoxelIndices[threadid];
+		size_t flatIndex = GetFlatIndex(index, regularGrid->dimensions);
+		auto& voxel = regularGrid->elements[flatIndex];
+
+		if (-1.0f > voxel.tsdfValue || 1.0f < voxel.tsdfValue) return;
+
+		extractionVoxels[flatIndex].value = voxel.tsdfValue;
+
+		extractionVoxels[flatIndex].globalIndexX = index.x;
+		extractionVoxels[flatIndex].globalIndexY = index.y;
+		extractionVoxels[flatIndex].globalIndexZ = index.z;
+
+		extractionVoxels[flatIndex].position =
+			GetPosition(regularGrid->center, regularGrid->dimensions,
+				regularGrid->voxelSize, index);
+
+		extractionVoxels[flatIndex].edgeIndexX = flatIndex * 3;
+		extractionVoxels[flatIndex].edgeIndexY = flatIndex * 3 + 1;
+		extractionVoxels[flatIndex].edgeIndexZ = flatIndex * 3 + 2;
+
+		extractionVoxels[flatIndex].numberOfTriangles = 0;
+
+		extractionVoxels[flatIndex].triangles[0].edgeIndices[0] = UINT32_MAX;
+		extractionVoxels[flatIndex].triangles[0].edgeIndices[1] = UINT32_MAX;
+		extractionVoxels[flatIndex].triangles[0].edgeIndices[2] = UINT32_MAX;
+
+		extractionVoxels[flatIndex].triangles[1].edgeIndices[0] = UINT32_MAX;
+		extractionVoxels[flatIndex].triangles[1].edgeIndices[1] = UINT32_MAX;
+		extractionVoxels[flatIndex].triangles[1].edgeIndices[2] = UINT32_MAX;
+
+		extractionVoxels[flatIndex].triangles[2].edgeIndices[0] = UINT32_MAX;
+		extractionVoxels[flatIndex].triangles[2].edgeIndices[1] = UINT32_MAX;
+		extractionVoxels[flatIndex].triangles[2].edgeIndices[2] = UINT32_MAX;
+
+		extractionVoxels[flatIndex].triangles[3].edgeIndices[0] = UINT32_MAX;
+		extractionVoxels[flatIndex].triangles[3].edgeIndices[1] = UINT32_MAX;
+		extractionVoxels[flatIndex].triangles[3].edgeIndices[2] = UINT32_MAX;
+
+		extractionEdges[flatIndex * 3 + 0].startVoxelIndex = index;
+		extractionEdges[flatIndex * 3 + 0].edgeDirection = 0;
+		extractionEdges[flatIndex * 3 + 0].zeroCrossing = false;
+		extractionEdges[flatIndex * 3 + 0].zeroCrossingPointIndex = UINT32_MAX;
+		extractionEdges[flatIndex * 3 + 1].startVoxelIndex = index;
+		extractionEdges[flatIndex * 3 + 1].edgeDirection = 1;
+		extractionEdges[flatIndex * 3 + 1].zeroCrossing = false;
+		extractionEdges[flatIndex * 3 + 1].zeroCrossingPointIndex = UINT32_MAX;
+		extractionEdges[flatIndex * 3 + 2].startVoxelIndex = index;
+		extractionEdges[flatIndex * 3 + 2].edgeDirection = 2;
+		extractionEdges[flatIndex * 3 + 2].zeroCrossing = false;
+		extractionEdges[flatIndex * 3 + 2].zeroCrossingPointIndex = UINT32_MAX;
+
+		// Next X
+		{
+			uint3 nindex = make_uint3(index.x + 1, index.y, index.z);
+			size_t flatNIndex = GetFlatIndex(nindex, regularGrid->dimensions);
+
+			if (-1.0f > regularGrid->elements[flatNIndex].tsdfValue ||
+				1.0f < regularGrid->elements[flatNIndex].tsdfValue)
+			{
+				extractionEdges[flatIndex * 3 + 0].endVoxelIndex = make_uint3(UINT32_MAX, UINT32_MAX, UINT32_MAX);
+			}
+			else
+			{
+				extractionEdges[flatIndex * 3 + 0].endVoxelIndex = make_uint3(index.x + 1, index.y, index.z);
+			}
+		}
+
+		// Next Y
+		{
+			uint3 nindex = make_uint3(index.x, index.y + 1, index.z);
+			size_t flatNIndex = GetFlatIndex(nindex, regularGrid->dimensions);
+
+			if (-1.0f > regularGrid->elements[flatNIndex].tsdfValue ||
+				1.0f < regularGrid->elements[flatNIndex].tsdfValue)
+			{
+				extractionEdges[flatIndex * 3 + 1].endVoxelIndex = make_uint3(UINT32_MAX, UINT32_MAX, UINT32_MAX);
+			}
+			else
+			{
+				extractionEdges[flatIndex * 3 + 1].endVoxelIndex = make_uint3(index.x, index.y + 1, index.z);
+			}
+		}
+
+		// Next Z
+		{
+			uint3 nindex = make_uint3(index.x, index.y, index.z + 1);
+			size_t flatNIndex = GetFlatIndex(nindex, regularGrid->dimensions);
+
+			if (-1.0f > regularGrid->elements[flatNIndex].tsdfValue ||
+				1.0f < regularGrid->elements[flatNIndex].tsdfValue)
+			{
+				extractionEdges[flatIndex * 3 + 2].endVoxelIndex = make_uint3(UINT32_MAX, UINT32_MAX, UINT32_MAX);
+			}
+			else
+			{
+				extractionEdges[flatIndex * 3 + 2].endVoxelIndex = make_uint3(index.x, index.y, index.z + 1);
+			}
+		}
+	}
+
+	template<typename T>
+	__global__ void Kernel_GetValidVoxelIndices(
+		RegularGrid<T>::Internal* regularGrid, uint3* indices, unsigned int* numberOfIndices)
+	{
+		uint32_t indexX = blockIdx.x * blockDim.x + threadIdx.x;
+		uint32_t indexY = blockIdx.y * blockDim.y + threadIdx.y;
+		uint32_t indexZ = blockIdx.z * blockDim.z + threadIdx.z;
+
+		if (indexX >= regularGrid->dimensions.x ||
+			indexY >= regularGrid->dimensions.y ||
+			indexZ >= regularGrid->dimensions.z) return;
+
+		uint3 index = make_uint3(indexX, indexY, indexZ);
+		size_t flatIndex = GetFlatIndex(index, regularGrid->dimensions);
+		auto& voxel = regularGrid->elements[flatIndex];
+
+		if (-1.0f > voxel.tsdfValue || 1.0f < voxel.tsdfValue) return;
+
+		auto i = atomicAdd(numberOfIndices, 1);
+		
+		//printf("[%d] %d, %d, %d\n", i, indexX, indexY, indexZ);
+		indices[i] = index;
+	}
+
+	template<typename T>
+	__global__ void Kernel_CalculateZeroCrossingPoints(
+		RegularGrid<T>::Internal* regularGrid,
+		ExtractionVoxel* extractionVoxels, unsigned int* numberOfExtractionVoxels, ExtractionEdge* extractionEdges, unsigned int* numberOfExtractionEdges,
+		Eigen::Vector3f* zeroCrossingPositions, unsigned int* numberOfZeroCrossingPositions)
+	{
+		unsigned int threadid = blockIdx.x * blockDim.x + threadIdx.x;
+		if (threadid > *numberOfExtractionVoxels * 3 - 1) return;
+
+		auto& extractionEdge = extractionEdges[threadid];
+		if (UINT32_MAX == extractionEdge.startVoxelIndex.x ||
+			UINT32_MAX == extractionEdge.startVoxelIndex.y ||
+			UINT32_MAX == extractionEdge.startVoxelIndex.z ||
+			UINT32_MAX == extractionEdge.endVoxelIndex.x ||
+			UINT32_MAX == extractionEdge.endVoxelIndex.y ||
+			UINT32_MAX == extractionEdge.endVoxelIndex.z) return;
+
+		auto flatStartVoxelIndex = GetFlatIndex(extractionEdge.startVoxelIndex, regularGrid->dimensions);
+		auto startVoxel = extractionVoxels[flatStartVoxelIndex];
+		auto endStartVoxelIndex = GetFlatIndex(extractionEdge.endVoxelIndex, regularGrid->dimensions);
+		auto endVoxel = extractionVoxels[endStartVoxelIndex];
+
+		if (-1.0f > startVoxel.value || 1.0f < startVoxel.value) return;
+		if (-1.0f > endVoxel.value || 1.0f < endVoxel.value) return;
+
+		if ((startVoxel.value > 0 && endVoxel.value < 0) || (startVoxel.value < 0 && endVoxel.value > 0)) {
+			extractionEdge.zeroCrossing = true;
+
+			float ratio = startVoxel.value / (startVoxel.value - endVoxel.value);
+			auto zeroCrossingPoint = startVoxel.position + ratio * (endVoxel.position - startVoxel.position);
+
+			auto zeroCrossingIndex = atomicAdd(numberOfZeroCrossingPositions, 1);
+			zeroCrossingPositions[zeroCrossingIndex] = zeroCrossingPoint;
+			extractionEdge.zeroCrossingPointIndex = zeroCrossingIndex;
+		}
+	}
 
 	__host__ __device__
 		uint3 GetIndex(const float3& gridCenter, uint3 gridDimensions, float voxelSize, const float3& position)
@@ -1368,6 +1645,27 @@ namespace CUDA
 			t = Time::End(t, "SmoothTSDF");*/
 		}
 
+		{
+			t = Time::Now();
+
+			rg.PopulateExtractionVoxels();
+
+			t = Time::End(t, "PopulateExtractionVoxels");
+
+			//r (size_t i = 0; i < mesh.size() / 3; i++)
+			//
+			//uto v0 = mesh[i * 3];
+			//uto v1 = mesh[i * 3 + 1];
+			//uto v2 = mesh[i * 3 + 2];
+
+			//D::AddTriangle("mesh",
+			//{ v0.position.x, v0.position.y, v0.position.z },
+			//{ v1.position.x, v1.position.y, v1.position.z },
+			//{ v2.position.x, v2.position.y, v2.position.z },
+			//Color4::White);
+			//
+		}
+
 		//SaveRegularGridToVTK(rg, "C:\\Resources\\3D\\VTK\\rg.vtk");
 
 #ifdef MARCHING_CUBES
@@ -1416,9 +1714,9 @@ namespace CUDA
 								{ rg.internal->voxelSize * 0.5f, rg.internal->voxelSize * 0.5f,rg.internal->voxelSize * 0.5f },
 								{ n.x, n.y, n.z }, c4);
 						}
-					}
-				}
-			}
+		}
+	}
+}
 
 			t = Time::End(t, "?????");
 		}
@@ -1611,7 +1909,7 @@ namespace CUDA
 			checkCudaErrors(cudaFree(divergence));
 			checkCudaErrors(cudaFree(potentialField));
 			checkCudaErrors(cudaFree(inputField));
-		}
+			}
 #endif // 
 
 		{

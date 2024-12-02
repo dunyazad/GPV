@@ -7,6 +7,7 @@
 #include <CUDA/CUDA.cuh>
 #include <CUDA/Octree.cuh>
 #include <CUDA/RegularGrid.cuh>
+#include <CUDA/SVO.cuh>
 
 extern int pid;
 extern size_t size_0;
@@ -55,3 +56,4 @@ void AppStartCallback_Integrate(App* pApp);
 void AppStartCallback_Octree(App* pApp);
 void AppStartCallback_RegularGrid(App* pApp);
 void AppStartCallback_Simple(App* pApp);
+void AppStartCallback_SVO(App* pApp);

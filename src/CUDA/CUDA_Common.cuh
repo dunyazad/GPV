@@ -6,18 +6,48 @@
 #include <iostream>
 #include <stack>
 #include <vector>
+#include <tuple>
 
 #include <cuda_runtime.h>
 #include <curand_kernel.h>
 #include <cooperative_groups.h>
+#include <vector_types.h>
 #include <nvtx3/nvToolsExt.h>
 
 #include <cusolverSp.h>
 #include <cusparse.h>
 
-#include <thrust/reduce.h>
+#include <thrust/async/for_each.h>
+#include <thrust/async/reduce.h>
+#include <thrust/copy.h>
+#include <thrust/count.h>
+#include <thrust/device_free.h>
+#include <thrust/device_malloc.h>
+#include <thrust/device_ptr.h>
 #include <thrust/device_vector.h>
+#include <thrust/execution_policy.h>
+#include <thrust/extrema.h>
+#include <thrust/fill.h>
+#include <thrust/functional.h>
+#include <thrust/gather.h>
+#include <thrust/generate.h>
 #include <thrust/host_vector.h>
+#include <thrust/iterator/constant_iterator.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/discard_iterator.h>
+#include <thrust/iterator/zip_iterator.h>
+#include <thrust/random.h>
+#include <thrust/reduce.h>
+#include <thrust/remove.h>
+#include <thrust/scan.h>
+#include <thrust/sequence.h>
+#include <thrust/set_operations.h>
+#include <thrust/sort.h>
+#include <thrust/transform.h>
+#include <thrust/transform_reduce.h>
+#include <thrust/transform_scan.h>
+#include <thrust/tuple.h>
+#include <thrust/unique.h>
 
 #include <Eigen/Dense>
 #include <Eigen/Sparse>

@@ -49,6 +49,8 @@ set(cuda_source_list
     src/CUDA/Octree.cu
     src/CUDA/RegularGrid.cuh
     src/CUDA/RegularGrid.cu
+    src/CUDA/SVO.cuh
+    src/CUDA/SVO.cu
 )
 
 set(source_list
@@ -74,6 +76,7 @@ set(source_list
     src/App/AppStartCallback_Octree.cpp
     src/App/AppStartCallback_RegularGrid.cpp
     src/App/AppStartCallback_Simple.cpp
+    src/App/AppStartCallback_SVO.cpp
     src/App/USBHandler.h
     src/App/USBHandler.cpp
     src/App/Utility.h
@@ -142,7 +145,9 @@ target_link_libraries(GPV
 
 target_link_libraries(cuda_objects PRIVATE
     ${VTK_LIBRARIES}
- )
+)
+
+target_compile_options(cuda_objects PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--extended-lambda>)
 
 if(MSVC)
     set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT GPV)
