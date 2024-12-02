@@ -661,7 +661,7 @@ void AppStartCallback_Integrate(App* pApp)
 
 	uint3 volumeDimension = make_uint3(volumeDimensionX, volumeDimensionY, volumeDimensionZ);
 
-	CUDA::Voxel* volume;
+	CUDA::cuCache::Voxel* volume;
 	cudaMallocManaged(&volume, sizeof(CUDA::Voxel) * volumeDimensionX * volumeDimensionY * volumeDimensionZ);
 	cudaDeviceSynchronize();
 
@@ -763,7 +763,7 @@ void AppStartCallback_Integrate(App* pApp)
 		vector<Eigen::Vector3f> loadedPoints;
 		int loadedCount = 0;
 
-		CUDA::ClearVolume(volume, volumeDimension);
+		CUDA::cuCache::ClearVolume(volume, volumeDimension);
 
 		//size_t i = 3;
 		for (size_t i = 0; i < 10; i++)
@@ -814,7 +814,7 @@ void AppStartCallback_Integrate(App* pApp)
 				numberOfInputPoints++;
 			}
 
-			CUDA::IntegrateInputPoints(
+			CUDA::cuCache::IntegrateInputPoints(
 				volume,
 				volumeDimension,
 				0.1f,
@@ -826,16 +826,16 @@ void AppStartCallback_Integrate(App* pApp)
 			Time::End(te, "Loading PointCloud Patch", i);
 		}
 
-		auto numberOfSurfaceVoxels = CUDA::GetNumberOfSurfaceVoxels(volume, volumeDimension, 0.1f);
+		auto numberOfSurfaceVoxels = CUDA::cuCache::GetNumberOfSurfaceVoxels(volume, volumeDimension, 0.1f);
 
-		CUDA::Point* resultPoints;
-		cudaMallocManaged(&resultPoints, sizeof(CUDA::Point) * numberOfSurfaceVoxels * 5);
+		CUDA::cuCache::Point* resultPoints;
+		cudaMallocManaged(&resultPoints, sizeof(CUDA::cuCache::Point) * numberOfSurfaceVoxels * 5);
 
 		size_t* numberOfResultPoints;
 		cudaMallocManaged(&numberOfResultPoints, sizeof(size_t));
 		cudaMemset(numberOfResultPoints, 0, sizeof(size_t));
 
-		CUDA::ExtractSurfacePoints(volume, volumeDimension, voxelSize, aabb.min(), resultPoints, numberOfResultPoints);
+		CUDA::cuCache::ExtractSurfacePoints(volume, volumeDimension, voxelSize, aabb.min(), resultPoints, numberOfResultPoints);
 
 		cudaFree(volume);
 
@@ -847,8 +847,8 @@ void AppStartCallback_Integrate(App* pApp)
 		PLYFormat ply;
 
 		auto nop = *numberOfResultPoints;
-		CUDA::Point* h_resultPoints = new CUDA::Point[nop];
-		cudaMemcpy(h_resultPoints, resultPoints, sizeof(CUDA::Point) * nop, cudaMemcpyDeviceToHost);
+		CUDA::cuCache::Point* h_resultPoints = new CUDA::cuCache::Point[nop];
+		cudaMemcpy(h_resultPoints, resultPoints, sizeof(CUDA::cuCache::Point) * nop, cudaMemcpyDeviceToHost);
 
 		for (size_t i = 0; i < nop; i++)
 		{
@@ -2138,7 +2138,7 @@ void AppStartCallback_TestOctree(App* pApp)
 
 	LoadModel(pApp->GetRenderer(), "C:\\Resources\\3D\\PLY\\Complete\\Lower.ply");
 
-	CUDA::TestOctree();
+	CUDA::Octree::TestOctree();
 }
 
 void AppStartCallback_TestRegularGrid(App* pApp)

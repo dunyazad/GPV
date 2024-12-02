@@ -2,7 +2,6 @@
 
 #include <vtkHeaderFiles.h>
 
-#include <App/Serialization.hpp>
 #include <App/Utility.h>
 
 #include <Debugging/VisualDebugging.h>
@@ -11,66 +10,47 @@ using VD = VisualDebugging;
 
 namespace CUDA
 {
-	template<typename T> class RegularGrid;
-
-	class PatchBuffers
+#pragma region PatchBuffers
+	PatchBuffers::PatchBuffers(int width, int height)
+		: width(width), height(height)
 	{
-	public:
-		PatchBuffers(int width = 256, int height = 480)
-			: width(width), height(height)
-		{
-			checkCudaErrors(cudaMallocManaged(&inputPoints, sizeof(float3) * width * height));
-			checkCudaErrors(cudaMallocManaged(&inputNormals, sizeof(float3) * width * height));
-			checkCudaErrors(cudaMallocManaged(&inputColors, sizeof(float3) * width * height));
-		}
+		checkCudaErrors(cudaMallocManaged(&inputPoints, sizeof(float3) * width * height));
+		checkCudaErrors(cudaMallocManaged(&inputNormals, sizeof(float3) * width * height));
+		checkCudaErrors(cudaMallocManaged(&inputColors, sizeof(float3) * width * height));
+	}
 
-		~PatchBuffers()
-		{
-			checkCudaErrors(cudaFree(inputPoints));
-			checkCudaErrors(cudaFree(inputNormals));
-			checkCudaErrors(cudaFree(inputColors));
-		}
-
-		int width;
-		int height;
-		size_t numberOfInputPoints;
-		float3* inputPoints;
-		float3* inputNormals;
-		float3* inputColors;
-
-		void Clear()
-		{
-			numberOfInputPoints = 0;
-			checkCudaErrors(cudaMemset(inputPoints, 0, sizeof(float3) * width * height));
-			checkCudaErrors(cudaMemset(inputNormals, 0, sizeof(float3) * width * height));
-			checkCudaErrors(cudaMemset(inputColors, 0, sizeof(float3) * width * height));
-		}
-
-		void FromPLYFile(const PLYFormat& ply)
-		{
-			Clear();
-
-			numberOfInputPoints = ply.GetPoints().size() / 3;
-			checkCudaErrors(cudaMemcpy(inputPoints, ply.GetPoints().data(), sizeof(float3) * numberOfInputPoints, cudaMemcpyHostToDevice));
-			checkCudaErrors(cudaMemcpy(inputNormals, ply.GetNormals().data(), sizeof(float3) * numberOfInputPoints, cudaMemcpyHostToDevice));
-			checkCudaErrors(cudaMemcpy(inputColors, ply.GetColors().data(), sizeof(float3) * numberOfInputPoints, cudaMemcpyHostToDevice));
-		}
-	};
-
-	struct Voxel
+	PatchBuffers::~PatchBuffers()
 	{
-		float tsdfValue;
-		float weight;
-		float3 normal;
-		float3 color;
-	};
+		checkCudaErrors(cudaFree(inputPoints));
+		checkCudaErrors(cudaFree(inputNormals));
+		checkCudaErrors(cudaFree(inputColors));
+	}
 
-	struct Vertex
+	int width;
+	int height;
+	size_t numberOfInputPoints;
+	float3* inputPoints;
+	float3* inputNormals;
+	float3* inputColors;
+
+	void PatchBuffers::Clear()
 	{
-		float3 position;
-		float3 normal;
-		float3 color;
-	};
+		numberOfInputPoints = 0;
+		checkCudaErrors(cudaMemset(inputPoints, 0, sizeof(float3) * width * height));
+		checkCudaErrors(cudaMemset(inputNormals, 0, sizeof(float3) * width * height));
+		checkCudaErrors(cudaMemset(inputColors, 0, sizeof(float3) * width * height));
+	}
+
+	void PatchBuffers::FromPLYFile(const PLYFormat& ply)
+	{
+		Clear();
+
+		numberOfInputPoints = ply.GetPoints().size() / 3;
+		checkCudaErrors(cudaMemcpy(inputPoints, ply.GetPoints().data(), sizeof(float3) * numberOfInputPoints, cudaMemcpyHostToDevice));
+		checkCudaErrors(cudaMemcpy(inputNormals, ply.GetNormals().data(), sizeof(float3) * numberOfInputPoints, cudaMemcpyHostToDevice));
+		checkCudaErrors(cudaMemcpy(inputColors, ply.GetColors().data(), sizeof(float3) * numberOfInputPoints, cudaMemcpyHostToDevice));
+	}
+#pragma endregion
 
 	template<typename T>
 	__global__ void Kernel_Clear(RegularGrid<T>::Internal* regularGrid);
@@ -1347,8 +1327,8 @@ namespace CUDA
 			t = Time::Now();
 
 			stringstream ss;
-			//ss << "C:\\Resources\\3D\\PLY\\Complete\\Lower_pointcloud.ply";
-			ss << "D:\\Resources\\3D\\PLY\\Lower_pointcloud_crop.ply";
+			ss << "C:\\Resources\\3D\\PLY\\Complete\\Lower_pointcloud_crop.ply";
+			//ss << "C:\\Resources\\3D\\PLY\\Lower_pointcloud_crop.ply";
 
 			PLYFormat ply;
 			ply.Deserialize(ss.str());
@@ -1376,7 +1356,7 @@ namespace CUDA
 			t = Time::End(t, "SmoothTSDF");*/
 		}
 
-		SaveRegularGridToVTK(rg, "D:\\Resources\\3D\\VTK\\rg.vtk");
+		//SaveRegularGridToVTK(rg, "C:\\Resources\\3D\\VTK\\rg.vtk");
 
 #ifdef MARCHING_CUBES
 		{

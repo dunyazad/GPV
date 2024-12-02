@@ -4,5 +4,8 @@
 
 namespace CUDA
 {
-    void TestOctree();
+	namespace Octree
+	{
+		void TestOctree();
+	}
 }
