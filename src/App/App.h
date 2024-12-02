@@ -1,3 +1,5 @@
+#pragma once
+
 #include <Common.h>
 
 #include <App/CustomTrackballStyle.h>
