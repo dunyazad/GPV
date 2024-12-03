@@ -335,7 +335,7 @@ namespace CUDA
 		{
 			// Allocate buffer for smoothed elements
 			T* smoothedElements;
-			checkCudaErrors(cudaMallocManaged(&smoothedElements, sizeof(T) * internal->numberOfVoxels));
+			checkCudaErrors(cudaMallocManaged(&smoothedElements, sizeof(T) * h_internal.numberOfVoxels));
 
 			// Set up the CUDA kernel launch parameters
 			dim3 threadsPerBlock(8, 8, 8); // You can optimize these values
@@ -350,7 +350,7 @@ namespace CUDA
 			checkCudaErrors(cudaDeviceSynchronize());
 
 			// Copy the smoothed values back to the original TSDF grid
-			cudaMemcpy(internal->elements, smoothedElements, sizeof(T) * internal->numberOfVoxels, cudaMemcpyDeviceToDevice);
+			cudaMemcpy(h_internal.elements, smoothedElements, sizeof(T) * h_internal.numberOfVoxels, cudaMemcpyDeviceToDevice);
 
 			// Free the temporary smoothed elements buffer
 			checkCudaErrors(cudaFree(smoothedElements));
@@ -1054,7 +1054,7 @@ namespace CUDA
 		auto currentIndex = GetIndex(regularGrid->center, regularGrid->dimensions, regularGrid->voxelSize, p);
 		if (currentIndex.x == UINT_MAX || currentIndex.y == UINT_MAX || currentIndex.z == UINT_MAX) return;
 
-		int offset = 1;
+		int offset = 2;
 		for (uint32_t nzi = currentIndex.z - offset; nzi < currentIndex.z + offset; nzi++)
 		{
 			if (currentIndex.z < offset || nzi >= regularGrid->dimensions.z) continue;
@@ -1640,9 +1640,9 @@ namespace CUDA
 
 			t = Time::End(t, "Insert using PatchBuffers");
 
-			/*rg.SmoothTSDF();
+			rg.SmoothTSDF();
 
-			t = Time::End(t, "SmoothTSDF");*/
+			t = Time::End(t, "SmoothTSDF");
 		}
 
 		{

@@ -5,7 +5,9 @@
 #include <App/AppEventHandlers.h>
 
 #include <CUDA/CUDA.cuh>
+#include <CUDA/HashMap.cuh>
 #include <CUDA/Octree.cuh>
+#include <CUDA/PSR.cuh>
 #include <CUDA/RegularGrid.cuh>
 #include <CUDA/SVO.cuh>
 
@@ -52,8 +54,10 @@ void LoadDepthImage();
 
 bool AppStartCallback(App* pApp);
 void AppStartCallback_Capture(App* pApp);
+void AppStartCallback_HashMap(App* pApp);
 void AppStartCallback_Integrate(App* pApp);
 void AppStartCallback_Octree(App* pApp);
+void AppStartCallback_PSR(App* pApp);
 void AppStartCallback_RegularGrid(App* pApp);
 void AppStartCallback_Simple(App* pApp);
 void AppStartCallback_SVO(App* pApp);

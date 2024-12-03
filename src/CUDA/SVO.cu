@@ -74,79 +74,6 @@ namespace CUDA
 		}
 #pragma endregion
 
-		//__host__ __device__
-		//	uint64_t GetMortonCode(
-		//		const Eigen::Vector3f& min,
-		//		const Eigen::Vector3f& max,
-		//		int maxDepth,
-		//		const Eigen::Vector3f& position) {
-		//	// Validate and compute range
-		//	Eigen::Vector3f range = max - min;
-		//	range = range.cwiseMax(Eigen::Vector3f::Constant(1e-6f)); // Avoid zero range
-
-		//	// Normalize position
-		//	Eigen::Vector3f relativePos = (position - min).cwiseQuotient(range);
-
-		//	// Clamp to [0, 1]
-		//	relativePos = relativePos.cwiseMax(0.0f).cwiseMin(1.0f);
-
-		//	// Scale to Morton grid size
-		//	uint32_t maxCoordinateValue = (1 << maxDepth) - 1; // maxCoordinateValue = 1 for maxDepth = 1
-		//	//uint32_t x = static_cast<uint32_t>(roundf(relativePos.x() * maxCoordinateValue * 1000)) / 1000;
-		//	//uint32_t y = static_cast<uint32_t>(roundf(relativePos.y() * maxCoordinateValue * 1000)) / 1000;
-		//	//uint32_t z = static_cast<uint32_t>(roundf(relativePos.z() * maxCoordinateValue * 1000)) / 1000;
-		//	uint32_t x = static_cast<uint32_t>(roundf(relativePos.x() * maxCoordinateValue));
-		//	uint32_t y = static_cast<uint32_t>(roundf(relativePos.y() * maxCoordinateValue));
-		//	uint32_t z = static_cast<uint32_t>(roundf(relativePos.z() * maxCoordinateValue));
-
-		//	// Compute Morton code
-		//	uint64_t mortonCode = 0;
-		//	for (int i = 0; i < maxDepth; ++i) {
-		//		mortonCode |= ((x >> i) & 1ULL) << (3 * i);
-		//		mortonCode |= ((y >> i) & 1ULL) << (3 * i + 1);
-		//		mortonCode |= ((z >> i) & 1ULL) << (3 * i + 2);
-		//	}
-
-		//	return mortonCode;
-		//}
-
-		__host__ __device__
-			void printBinary(uint64_t num)
-		{
-			char buffer[100];  // Buffer large enough to hold the entire output, including binary, thread info, and null terminator
-			int offset = 0;
-
-			// Construct the binary representation
-			const int BITS = sizeof(num) * 8;
-			for (int i = BITS - 1; i >= 0; i--) {
-				uint64_t mask = 1ULL << i;
-				buffer[offset++] = (num & mask) ? '1' : '0';
-			}
-
-			buffer[offset] = '\0';  // Null-terminate the string
-
-			// Print the entire buffer in one printf call
-			printf("%s\n", buffer);
-		}
-
-		struct OctreeNode {
-			uint64_t mortonCode;
-			bool isLeaf;
-			int children[8];  // 자식 노드의 인덱스를 저장. -1은 자식이 없음을 의미.
-			int parentIndex;  // 부모 노드의 인덱스. 루트는 -1로 설정.
-			Eigen::Vector3f minBound;  // 노드의 최소 경계.
-			Eigen::Vector3f maxBound;  // 노드의 최대 경계.
-			int depth;  // 노드의 깊이.
-
-			__host__ __device__
-				OctreeNode(uint64_t code = 0, int parent = -1, const Eigen::Vector3f& min = Eigen::Vector3f::Zero(), const Eigen::Vector3f& max = Eigen::Vector3f::Zero(), int depth = 0)
-				: mortonCode(code), isLeaf(true), parentIndex(parent), minBound(min), maxBound(max), depth(depth) {
-				for (int i = 0; i < 8; ++i) {
-					children[i] = -1;  // 모든 자식 노드를 -1로 초기화
-				}
-			}
-		};
-
 		__host__ __device__
 			uint64_t GetMortonCode(
 				const Eigen::Vector3f& min,
@@ -179,6 +106,54 @@ namespace CUDA
 
 			return mortonCode;
 		}
+
+		__host__ __device__
+			void printBinary(uint64_t num)
+		{
+			char buffer[100];  // Buffer large enough to hold the entire output, including binary, thread info, and null terminator
+			int offset = 0;
+
+			// Construct the binary representation
+			const int BITS = sizeof(num) * 8;
+			for (int i = BITS - 1; i >= 0; i--) {
+				uint64_t mask = 1ULL << i;
+				buffer[offset++] = (num & mask) ? '1' : '0';
+			}
+
+			buffer[offset] = '\0';  // Null-terminate the string
+
+			// Print the entire buffer in one printf call
+			printf("%s\n", buffer);
+		}
+
+		__device__ int GetChildIndex(uint64_t mortonCode, int currentDepth) {
+			// Calculate the bit shift to extract the 3 bits corresponding to the given depth
+			int shift = currentDepth * 3;
+
+			// Extract the 3 bits at the given depth level
+			int childIndex = (mortonCode >> shift) & 0b111;
+
+			// Return the child index as an integer between 0 and 7
+			return childIndex;
+		}
+
+		struct OctreeNode {
+			uint64_t mortonCode;
+			bool isLeaf;
+			int children[8];  // 자식 노드의 인덱스를 저장. -1은 자식이 없음을 의미.
+			int parentIndex;  // 부모 노드의 인덱스. 루트는 -1로 설정.
+			Eigen::Vector3f minBound;  // 노드의 최소 경계.
+			Eigen::Vector3f maxBound;  // 노드의 최대 경계.
+			int depth;  // 노드의 깊이.
+
+			__host__ __device__
+				OctreeNode(uint64_t code = 0, int parent = -1, const Eigen::Vector3f& min = Eigen::Vector3f::Zero(), const Eigen::Vector3f& max = Eigen::Vector3f::Zero(), int depth = 0)
+				: mortonCode(code), isLeaf(true), parentIndex(parent), minBound(min), maxBound(max), depth(depth) {
+				for (int i = 0; i < 8; ++i) {
+					children[i] = -1;  // 모든 자식 노드를 -1로 초기화
+				}
+			}
+		};
 
 		Eigen::Vector3f MortonCodeToPosition(uint64_t mortonCode, int depth, const Eigen::Vector3f& minBound, const Eigen::Vector3f& maxBound) {
 			Eigen::Vector3f range = maxBound - minBound;
@@ -220,7 +195,7 @@ namespace CUDA
 			OctreeNode* octreeNodesPtr = thrust::raw_pointer_cast(octreeNodes.data());
 
 			thrust::for_each(
-				thrust::make_counting_iterator<int>(0),
+				thrust::make_counting_iterator<int>(1),
 				thrust::make_counting_iterator<int>(numNodes),
 				[=] __device__(int idx) {
 				uint64_t mortonCode = mortonCodesPtr[idx];
