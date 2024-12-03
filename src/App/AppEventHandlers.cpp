@@ -128,43 +128,43 @@ bool OnKeyPress(App* app)
 	}
 	else if (key == "1")
 	{
-		VisualDebugging::ToggleVisibility("Original");
+		VisualDebugging::ToggleVisibility("Cubes_0");
 	}
 	else if (key == "2")
 	{
-		VisualDebugging::ToggleVisibility("DownSample");
+		VisualDebugging::ToggleVisibility("Cubes_1");
 	}
 	else if (key == "3")
 	{
-		VisualDebugging::ToggleVisibility("Filter");
+	VisualDebugging::ToggleVisibility("Cubes_2");
 	}
 	else if (key == "4")
 	{
-		VisualDebugging::ToggleVisibility("OctreeNode");
+	VisualDebugging::ToggleVisibility("Cubes_3");
 	}
 	else if (key == "5")
 	{
-		VisualDebugging::ToggleVisibility("WiredBox_4");
+	VisualDebugging::ToggleVisibility("Cubes_4");
 	}
 	else if (key == "6")
 	{
-		VisualDebugging::ToggleVisibility("WiredBox_5");
+	VisualDebugging::ToggleVisibility("Cubes_5");
 	}
 	else if (key == "7")
 	{
-		VisualDebugging::ToggleVisibility("WiredBox_6");
+	VisualDebugging::ToggleVisibility("Cubes_6");
 	}
 	else if (key == "8")
 	{
-		VisualDebugging::ToggleVisibility("WiredBox_7");
+	VisualDebugging::ToggleVisibility("Cubes_7");
 	}
 	else if (key == "9")
 	{
-		VisualDebugging::ToggleVisibility("WiredBox_8");
+	VisualDebugging::ToggleVisibility("Cubes_8");
 	}
 	else if (key == "0")
 	{
-		VisualDebugging::ToggleVisibility("WiredBox_9");
+	VisualDebugging::ToggleVisibility("Cubes_9");
 	}
 	else if (key == "Left")
 	{

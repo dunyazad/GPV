@@ -74,41 +74,41 @@ namespace CUDA
 		}
 #pragma endregion
 
-		__host__ __device__
-			uint64_t GetMortonCode(
-				const Eigen::Vector3f& min,
-				const Eigen::Vector3f& max,
-				int maxDepth,
-				const Eigen::Vector3f& position) {
-			// Validate and compute range
-			Eigen::Vector3f range = max - min;
-			range = range.cwiseMax(Eigen::Vector3f::Constant(1e-6f)); // Avoid zero range
+		//__host__ __device__
+		//	uint64_t GetMortonCode(
+		//		const Eigen::Vector3f& min,
+		//		const Eigen::Vector3f& max,
+		//		int maxDepth,
+		//		const Eigen::Vector3f& position) {
+		//	// Validate and compute range
+		//	Eigen::Vector3f range = max - min;
+		//	range = range.cwiseMax(Eigen::Vector3f::Constant(1e-6f)); // Avoid zero range
 
-			// Normalize position
-			Eigen::Vector3f relativePos = (position - min).cwiseQuotient(range);
+		//	// Normalize position
+		//	Eigen::Vector3f relativePos = (position - min).cwiseQuotient(range);
 
-			// Clamp to [0, 1]
-			relativePos = relativePos.cwiseMax(0.0f).cwiseMin(1.0f);
+		//	// Clamp to [0, 1]
+		//	relativePos = relativePos.cwiseMax(0.0f).cwiseMin(1.0f);
 
-			// Scale to Morton grid size
-			uint32_t maxCoordinateValue = (1 << maxDepth) - 1; // maxCoordinateValue = 1 for maxDepth = 1
-			//uint32_t x = static_cast<uint32_t>(roundf(relativePos.x() * maxCoordinateValue * 1000)) / 1000;
-			//uint32_t y = static_cast<uint32_t>(roundf(relativePos.y() * maxCoordinateValue * 1000)) / 1000;
-			//uint32_t z = static_cast<uint32_t>(roundf(relativePos.z() * maxCoordinateValue * 1000)) / 1000;
-			uint32_t x = static_cast<uint32_t>(roundf(relativePos.x() * maxCoordinateValue));
-			uint32_t y = static_cast<uint32_t>(roundf(relativePos.y() * maxCoordinateValue));
-			uint32_t z = static_cast<uint32_t>(roundf(relativePos.z() * maxCoordinateValue));
+		//	// Scale to Morton grid size
+		//	uint32_t maxCoordinateValue = (1 << maxDepth) - 1; // maxCoordinateValue = 1 for maxDepth = 1
+		//	//uint32_t x = static_cast<uint32_t>(roundf(relativePos.x() * maxCoordinateValue * 1000)) / 1000;
+		//	//uint32_t y = static_cast<uint32_t>(roundf(relativePos.y() * maxCoordinateValue * 1000)) / 1000;
+		//	//uint32_t z = static_cast<uint32_t>(roundf(relativePos.z() * maxCoordinateValue * 1000)) / 1000;
+		//	uint32_t x = static_cast<uint32_t>(roundf(relativePos.x() * maxCoordinateValue));
+		//	uint32_t y = static_cast<uint32_t>(roundf(relativePos.y() * maxCoordinateValue));
+		//	uint32_t z = static_cast<uint32_t>(roundf(relativePos.z() * maxCoordinateValue));
 
-			// Compute Morton code
-			uint64_t mortonCode = 0;
-			for (int i = 0; i < maxDepth; ++i) {
-				mortonCode |= ((x >> i) & 1ULL) << (3 * i);
-				mortonCode |= ((y >> i) & 1ULL) << (3 * i + 1);
-				mortonCode |= ((z >> i) & 1ULL) << (3 * i + 2);
-			}
+		//	// Compute Morton code
+		//	uint64_t mortonCode = 0;
+		//	for (int i = 0; i < maxDepth; ++i) {
+		//		mortonCode |= ((x >> i) & 1ULL) << (3 * i);
+		//		mortonCode |= ((y >> i) & 1ULL) << (3 * i + 1);
+		//		mortonCode |= ((z >> i) & 1ULL) << (3 * i + 2);
+		//	}
 
-			return mortonCode;
-		}
+		//	return mortonCode;
+		//}
 
 		__host__ __device__
 			void printBinary(uint64_t num)
@@ -134,17 +134,52 @@ namespace CUDA
 			bool isLeaf;
 			int children[8];  // 자식 노드의 인덱스를 저장. -1은 자식이 없음을 의미.
 			int parentIndex;  // 부모 노드의 인덱스. 루트는 -1로 설정.
+			Eigen::Vector3f minBound;  // 노드의 최소 경계.
+			Eigen::Vector3f maxBound;  // 노드의 최대 경계.
+			int depth;  // 노드의 깊이.
 
 			__host__ __device__
-				OctreeNode(uint64_t code = 0, int parent = -1)
-				: mortonCode(code), isLeaf(true), parentIndex(parent) {
+				OctreeNode(uint64_t code = 0, int parent = -1, const Eigen::Vector3f& min = Eigen::Vector3f::Zero(), const Eigen::Vector3f& max = Eigen::Vector3f::Zero(), int depth = 0)
+				: mortonCode(code), isLeaf(true), parentIndex(parent), minBound(min), maxBound(max), depth(depth) {
 				for (int i = 0; i < 8; ++i) {
 					children[i] = -1;  // 모든 자식 노드를 -1로 초기화
 				}
 			}
 		};
 
-		// Octree 노드의 3D 위치와 크기를 계산하는 함수
+		__host__ __device__
+			uint64_t GetMortonCode(
+				const Eigen::Vector3f& min,
+				const Eigen::Vector3f& max,
+				int maxDepth,
+				const Eigen::Vector3f& position) {
+			// Validate and compute range
+			Eigen::Vector3f range = max - min;
+			range = range.cwiseMax(Eigen::Vector3f::Constant(1e-6f)); // Avoid zero range
+
+			// Normalize position
+			Eigen::Vector3f relativePos = (position - min).cwiseQuotient(range);
+
+			// Clamp to [0, 1]
+			relativePos = relativePos.cwiseMax(0.0f).cwiseMin(1.0f);
+
+			// Scale to Morton grid size
+			uint32_t maxCoordinateValue = (1 << maxDepth) - 1; // maxCoordinateValue = 1 for maxDepth = 1
+			uint32_t x = static_cast<uint32_t>(roundf(relativePos.x() * maxCoordinateValue));
+			uint32_t y = static_cast<uint32_t>(roundf(relativePos.y() * maxCoordinateValue));
+			uint32_t z = static_cast<uint32_t>(roundf(relativePos.z() * maxCoordinateValue));
+
+			// Compute Morton code
+			uint64_t mortonCode = 0;
+			for (int i = 0; i < maxDepth; ++i) {
+				mortonCode |= ((x >> i) & 1ULL) << (3 * i);
+				mortonCode |= ((y >> i) & 1ULL) << (3 * i + 1);
+				mortonCode |= ((z >> i) & 1ULL) << (3 * i + 2);
+			}
+
+			return mortonCode;
+		}
+
 		Eigen::Vector3f MortonCodeToPosition(uint64_t mortonCode, int depth, const Eigen::Vector3f& minBound, const Eigen::Vector3f& maxBound) {
 			Eigen::Vector3f range = maxBound - minBound;
 
@@ -168,29 +203,16 @@ namespace CUDA
 			return minBound + position.cwiseProduct(range);
 		}
 
-		// Octree 노드를 큐브로 시각화하는 함수
-		void VisualizeOctreeNode(const thrust::host_vector<OctreeNode>& nodes, int nodeIndex, int maxDepth, const Eigen::Vector3f& minBound, const Eigen::Vector3f& maxBound, const std::string& layerName, const Color4& color) {
-			// 현재 노드의 위치 계산
-			int depth = maxDepth;  // 깊이는 트리의 최대 깊이로 초기화
-			Eigen::Vector3f center = MortonCodeToPosition(nodes[nodeIndex].mortonCode, depth, minBound, maxBound);
-
-			// 노드의 크기는 깊이에 따라 결정됨
-			float scale = (maxBound - minBound).norm() / (1 << depth);
-
-			// VisualDebugging 클래스를 사용해 노드를 큐브로 시각화
-			VD::AddCube(layerName, center, scale, color);
-
-			// 자식 노드를 재귀적으로 방문하여 시각화
-			for (int i = 0; i < 8; ++i) {
-				int childIndex = nodes[nodeIndex].children[i];
-				if (childIndex != -1) {
-					VisualizeOctreeNode(nodes, childIndex, maxDepth - 1, minBound, maxBound, layerName, color);
-				}
-			}
-		}
-
 		// Octree 빌드 함수 정의 (thrust 람다 사용)
-		void BuildOctreeWithThrust(thrust::device_vector<uint64_t>& mortonCodes, thrust::device_vector<OctreeNode>& octreeNodes, int maxDepth) {
+		void BuildOctreeWithThrust(
+			thrust::device_vector<uint64_t>& mortonCodes,
+			thrust::device_vector<OctreeNode>& octreeNodes,
+			int maxDepth,
+			const Eigen::Vector3f& minBound,
+			const Eigen::Vector3f& maxBound) {
+
+			octreeNodes[0] = OctreeNode(0, -1, minBound, maxBound, 0);
+
 			int numNodes = mortonCodes.size();
 
 			// raw pointer를 사용해 GPU 메모리에 직접 접근하도록 설정
@@ -204,10 +226,21 @@ namespace CUDA
 				uint64_t mortonCode = mortonCodesPtr[idx];
 				int parentIndex = 0; // 루트에서 시작 (루트 인덱스는 0)
 
+				Eigen::Vector3f currentMin = minBound;
+				Eigen::Vector3f currentMax = maxBound;
+
 				for (int depth = 0; depth < maxDepth; ++depth) {
+					if (depth == 6) return;
+
 					// 현재 깊이에서 3비트를 추출하여 어느 자식으로 내려가는지 결정
 					int shift = (maxDepth - 1 - depth) * 3;
 					uint64_t childIndex = (mortonCode >> shift) & 0b111;
+
+					// 경계 업데이트
+					Eigen::Vector3f midPoint = (currentMin + currentMax) * 0.5f;
+					if (childIndex & 0b001) currentMin.x() = midPoint.x(); else currentMax.x() = midPoint.x();
+					if (childIndex & 0b010) currentMin.y() = midPoint.y(); else currentMax.y() = midPoint.y();
+					if (childIndex & 0b100) currentMin.z() = midPoint.z(); else currentMax.z() = midPoint.z();
 
 					// 부모 노드로부터 자식 노드를 설정
 					int* childPtr = &(octreeNodesPtr[parentIndex].children[childIndex]);
@@ -218,7 +251,7 @@ namespace CUDA
 					if (atomicCAS(childPtr, expected, idx) == expected) {
 						// 자식이 성공적으로 설정된 경우 새로운 자식 노드를 초기화
 						newChildIndex = idx;
-						octreeNodesPtr[newChildIndex] = OctreeNode(mortonCode, parentIndex);
+						octreeNodesPtr[newChildIndex] = OctreeNode(mortonCode, parentIndex, currentMin, currentMax, depth + 1);
 						octreeNodesPtr[parentIndex].isLeaf = false;
 					}
 					else {
@@ -231,6 +264,33 @@ namespace CUDA
 				}
 			}
 			);
+		}
+
+		void Traverse(const thrust::host_vector<OctreeNode>& nodes, int nodeIndex, int depth)
+		{
+			auto& node = nodes[nodeIndex];
+			Eigen::Vector3f center = (node.minBound + node.maxBound) * 0.5f;
+			Eigen::Vector3f scale = (node.maxBound - node.minBound) * 0.5f;
+			//if (depth == 0)
+			{
+				//printBinary(node.mortonCode);
+				//printf("%6.4f, %6.4f, %6.4f <---> %6.4f, %6.4f, %6.4f\n",
+				//	node.mortonCode,
+				//	node.minBound.x(), node.minBound.y(), node.minBound.z(),
+				//	node.maxBound.x(), node.maxBound.y(), node.maxBound.z());
+
+				stringstream ss;
+				ss << "Cubes_" << depth;
+				VD::AddCube(ss.str(), center, scale, {0.0f, 0.0f, 1.0f}, Color4::White);
+			}
+
+			for (int i = 0; i < 8; ++i) {
+				int childIndex = nodes[nodeIndex].children[i];
+				if (childIndex != -1) {
+
+					Traverse(nodes, childIndex, depth + 1);
+				}
+			}
 		}
 
 		void TestSVO()
@@ -252,8 +312,8 @@ namespace CUDA
 
 			t = Time::End(t, "Copy data to device");
 
-			Eigen::Vector3f min(-200.0f, -200.0f, -200.0f);
-			Eigen::Vector3f max(200.0f, 200.0f, 200.0f);
+			Eigen::Vector3f min(-100.0f, -100.0f, -100.0f);
+			Eigen::Vector3f max(100.0f, 100.0f, 100.0f);
 			int maxDepth = 13;
 
 			printf("patchBuffers.numberOfInputPoints : %d\n", patchBuffers.numberOfInputPoints);
@@ -293,16 +353,18 @@ namespace CUDA
 			t = Time::End(t, "ready octreeNodes");
 
 			nvtxRangePushA("BuildOctreeWithThrust");
-			BuildOctreeWithThrust(mortonCodes, octreeNodes, maxDepth);
+			BuildOctreeWithThrust(mortonCodes, octreeNodes, maxDepth, min, max);
 			nvtxRangePop();
 			t = Time::End(t, "BuildOctreeWithThrust");
 
 			// Octree 노드를 호스트로 복사하고 시각화
 			thrust::host_vector<OctreeNode> hostOctreeNodes = octreeNodes;
 
-			string layerName = "OctreeNodes";
-			Color4 color(1.0f, 0.0f, 0.0f, 0.5f); // 빨간색 반투명 큐브
-			VisualizeOctreeNode(hostOctreeNodes, 0, maxDepth, min, max, layerName, color);
+			//string layerName = "OctreeNodes";
+			//Color4 color(1.0f, 0.0f, 0.0f, 0.5f); // 빨간색 반투명 큐브
+			//VisualizeOctreeNode(hostOctreeNodes, 0, maxDepth, min, max, layerName, color);
+
+			Traverse(hostOctreeNodes, 0, 0);
 		}
 	}
 }
