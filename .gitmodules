@@ -4,6 +4,3 @@
 [submodule "External/hidapi"]
 	path = External/hidapi
 	url = https://github.com/libusb/hidapi
-[submodule "External/cuCollections"]
-	path = External/cuCollections
-	url = https://github.com/NVIDIA/cuCollections.git
