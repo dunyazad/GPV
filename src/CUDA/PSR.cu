@@ -54,23 +54,23 @@ namespace CUDA
 				sizeof(Eigen::Vector3f) * numberOfInputPoints,
 				cudaMemcpyHostToDevice);
 
-			for (size_t i = 0; i < ply.GetPoints().size() / 3; i++)
-			{
-				auto px = ply.GetPoints()[i * 3 + 0];
-				auto py = ply.GetPoints()[i * 3 + 1];
-				auto pz = ply.GetPoints()[i * 3 + 2];
+			//for (size_t i = 0; i < ply.GetPoints().size() / 3; i++)
+			//{
+			//	auto px = ply.GetPoints()[i * 3 + 0];
+			//	auto py = ply.GetPoints()[i * 3 + 1];
+			//	auto pz = ply.GetPoints()[i * 3 + 2];
 
-				auto nx = ply.GetNormals()[i * 3 + 0];
-				auto ny = ply.GetNormals()[i * 3 + 1];
-				auto nz = ply.GetNormals()[i * 3 + 2];
+			//	auto nx = ply.GetNormals()[i * 3 + 0];
+			//	auto ny = ply.GetNormals()[i * 3 + 1];
+			//	auto nz = ply.GetNormals()[i * 3 + 2];
 
-				auto cx = ply.GetColors()[i * 3 + 0];
-				auto cy = ply.GetColors()[i * 3 + 1];
-				auto cz = ply.GetColors()[i * 3 + 2];
+			//	auto cx = ply.GetColors()[i * 3 + 0];
+			//	auto cy = ply.GetColors()[i * 3 + 1];
+			//	auto cz = ply.GetColors()[i * 3 + 2];
 
-				auto c4 = Color4::FromNormalized(cx, cy, cz, 1.0f);
-				VD::AddSphere("points", { px, py, pz }, { 0.05f, 0.05f, 0.05f }, { nx, ny, nz }, c4);
-			}
+			//	auto c4 = Color4::FromNormalized(cx, cy, cz, 1.0f);
+			//	VD::AddSphere("points", { px, py, pz }, { 0.05f, 0.05f, 0.05f }, { nx, ny, nz }, c4);
+			//}
 		}
 #pragma endregion
 
@@ -79,7 +79,7 @@ namespace CUDA
 			Eigen::Vector3f normal;
 			int weight;
 			float divergence;
-			__host__ __device__ Voxel() : normal(0.0f, 0.0f, 0.0f), weight(0), divergence(0.0f) {}
+			__host__ __device__ Voxel() : normal(0.0f, 0.0f, 0.0f), weight(0), divergence(FLT_MAX) {}
 		};
 
 		__host__ __device__
@@ -172,6 +172,13 @@ namespace CUDA
 			return index.z * dimensions.x * dimensions.y + index.y * dimensions.x + index.x;
 		}
 
+		__host__ __device__ bool ShouldAddCube(const Voxel& voxel) {
+			if (voxel.divergence == FLT_MAX) {
+				return false;
+			}
+			return fabsf(voxel.divergence) <= 1.0f;
+		}
+
 		void TestPSR()
 		{
 			auto t = Time::Now();
@@ -191,8 +198,8 @@ namespace CUDA
 
 			t = Time::End(t, "Copy data to device");
 
-			Eigen::Vector3f min(-5.0f, -5.0f, -5.0f);
-			Eigen::Vector3f max(5.0f, 5.0f, 5.0f);
+			Eigen::Vector3f min(-10.0f, -10.0f, -10.0f);
+			Eigen::Vector3f max(10.0f, 10.0f, 10.0f);
 			//Eigen::Vector3f min(-75.0f, -75.0f, -75.0f);
 			//Eigen::Vector3f max(75.0f, 75.0f, 75.0f);
 			Eigen::Vector3f diff = max - min;
@@ -242,25 +249,42 @@ namespace CUDA
 					size_t indexY = (index % (dimensions.y * dimensions.x)) / dimensions.x;
 					size_t indexX = (index % (dimensions.y * dimensions.x)) % dimensions.x;
 
-					Voxel& cv = d_volume[index];
+					Voxel cv = d_volume[index];  // 현재 복셀 값 복사
 
-					size_t piX = indexX; if (indexX > 0) piX--;
-					size_t niX = indexX; if (indexX < dimensions.x - 1) niX++;
-					size_t piY = indexY; if (indexY > 0) piY--;
-					size_t niY = indexY; if (indexY < dimensions.y - 1) niY++;
-					size_t piZ = indexZ; if (indexZ > 0) piZ--;
-					size_t niZ = indexZ; if (indexZ < dimensions.z - 1) niZ++;
+					// 경계 조건에 따른 이전/다음 인덱스 계산
+					size_t piX = (indexX > 0) ? indexX - 1 : indexX;
+					size_t niX = (indexX < dimensions.x - 1) ? indexX + 1 : indexX;
+					size_t piY = (indexY > 0) ? indexY - 1 : indexY;
+					size_t niY = (indexY < dimensions.y - 1) ? indexY + 1 : indexY;
+					size_t piZ = (indexZ > 0) ? indexZ - 1 : indexZ;
+					size_t niZ = (indexZ < dimensions.z - 1) ? indexZ + 1 : indexZ;
 
-					uint3 indexP = make_uint3(piX, piY, piZ);
-					size_t flatIndexP = GetFlatIndex(indexP, dimensions);
-					Voxel& pv = d_volume[flatIndexP];
+					// 이전 복셀과 다음 복셀의 인덱스와 데이터 가져오기
+					size_t flatIndexX1 = GetFlatIndex(make_uint3(piX, indexY, indexZ), dimensions);
+					size_t flatIndexX2 = GetFlatIndex(make_uint3(niX, indexY, indexZ), dimensions);
+					size_t flatIndexY1 = GetFlatIndex(make_uint3(indexX, piY, indexZ), dimensions);
+					size_t flatIndexY2 = GetFlatIndex(make_uint3(indexX, niY, indexZ), dimensions);
+					size_t flatIndexZ1 = GetFlatIndex(make_uint3(indexX, indexY, piZ), dimensions);
+					size_t flatIndexZ2 = GetFlatIndex(make_uint3(indexX, indexY, niZ), dimensions);
 
-					uint3 indexN = make_uint3(niX, niY, niZ);
-					size_t flatIndexN = GetFlatIndex(indexN, dimensions);
-					Voxel& nv = d_volume[flatIndexN];
+					// 이웃 복셀의 노멀 벡터와 가중치를 확인하여 유효한 값만 사용
+					Eigen::Vector3f normX1 = d_volume[flatIndexX1].weight > 0 ? d_volume[flatIndexX1].normal / (float)d_volume[flatIndexX1].weight : Eigen::Vector3f(0.0f, 0.0f, 0.0f);
+					Eigen::Vector3f normX2 = d_volume[flatIndexX2].weight > 0 ? d_volume[flatIndexX2].normal / (float)d_volume[flatIndexX2].weight : Eigen::Vector3f(0.0f, 0.0f, 0.0f);
+					Eigen::Vector3f normY1 = d_volume[flatIndexY1].weight > 0 ? d_volume[flatIndexY1].normal / (float)d_volume[flatIndexY1].weight : Eigen::Vector3f(0.0f, 0.0f, 0.0f);
+					Eigen::Vector3f normY2 = d_volume[flatIndexY2].weight > 0 ? d_volume[flatIndexY2].normal / (float)d_volume[flatIndexY2].weight : Eigen::Vector3f(0.0f, 0.0f, 0.0f);
+					Eigen::Vector3f normZ1 = d_volume[flatIndexZ1].weight > 0 ? d_volume[flatIndexZ1].normal / (float)d_volume[flatIndexZ1].weight : Eigen::Vector3f(0.0f, 0.0f, 0.0f);
+					Eigen::Vector3f normZ2 = d_volume[flatIndexZ2].weight > 0 ? d_volume[flatIndexZ2].normal / (float)d_volume[flatIndexZ2].weight : Eigen::Vector3f(0.0f, 0.0f, 0.0f);
 
-					Eigen::Vector3f dn = (nv.normal / (float)nv.weight - pv.normal / (float)pv.weight) / (2.0f * voxelSize);
-					cv.divergence = dn.x() + dn.y() + dn.z();
+					// 발산 계산 (중심 차분 방식)
+					float divX = (normX2.x() - normX1.x()) / (2.0f * voxelSize);
+					float divY = (normY2.y() - normY1.y()) / (2.0f * voxelSize);
+					float divZ = (normZ2.z() - normZ1.z()) / (2.0f * voxelSize);
+
+					// 발산 결과를 현재 복셀에 저장
+					cv.divergence = divX + divY + divZ;
+
+					// 결과를 다시 d_volume에 저장
+					d_volume[index] = cv;
 				});
 				nvtxRangePop();
 				t = Time::End(t, "Compute Divergence");
@@ -278,11 +302,17 @@ namespace CUDA
 						{
 							uint3 index = make_uint3(x, y, z);
 							size_t flatIndex = GetFlatIndex(index, dimensions);
-							if (h_volume[flatIndex].weight > 0) // Only add cubes where the count is greater than 0
+							Voxel& voxel = h_volume[flatIndex];
+
+							// 발산 값이 유효한지 확인하는 조건 강화
+							if (!isnan(voxel.divergence) && voxel.divergence != FLT_MAX)
 							{
-								Eigen::Vector3f position = GetPosition(center, dimensions, voxelSize, index);
-								VD::AddCube("volume", position, { voxelSize, voxelSize, voxelSize },
-									{ 0.0f, 0.0f, 1.0f }, Color4::FromNormalized(0.0f, 0.5f, 1.0f, 0.5f));
+								if (fabsf(voxel.divergence) > 0.0f)  // 발산 값이 일정 범위 내에 있는 경우에만 큐브 추가
+								{
+									Eigen::Vector3f position = GetPosition(center, dimensions, voxelSize, index);
+									VD::AddCube("volume", position, { voxelSize, voxelSize, voxelSize },
+										{ 0.0f, 0.0f, 1.0f }, Color4::White);
+								}
 							}
 						}
 					}
