@@ -74,6 +74,14 @@ namespace CUDA
 		}
 #pragma endregion
 
+		struct Voxel
+		{
+			Eigen::Vector3f normal;
+			int weight;
+			float divergence;
+			__host__ __device__ Voxel() : normal(0.0f, 0.0f, 0.0f), weight(0), divergence(0.0f) {}
+		};
+
 		__host__ __device__
 			uint64_t GetMortonCode(
 				const Eigen::Vector3f& min,
@@ -183,10 +191,10 @@ namespace CUDA
 
 			t = Time::End(t, "Copy data to device");
 
-			//Eigen::Vector3f min(-25.0f, -25.0f, -25.0f);
-			//Eigen::Vector3f max(25.0f, 25.0f, 25.0f);
-			Eigen::Vector3f min(-75.0f, -75.0f, -75.0f);
-			Eigen::Vector3f max(75.0f, 75.0f, 75.0f);
+			Eigen::Vector3f min(-5.0f, -5.0f, -5.0f);
+			Eigen::Vector3f max(5.0f, 5.0f, 5.0f);
+			//Eigen::Vector3f min(-75.0f, -75.0f, -75.0f);
+			//Eigen::Vector3f max(75.0f, 75.0f, 75.0f);
 			Eigen::Vector3f diff = max - min;
 			Eigen::Vector3f center = (max + min) * 0.5f;
 			float voxelSize = 0.1f;
@@ -195,45 +203,93 @@ namespace CUDA
 			dimensions.y = (uint32_t)ceilf(diff.y() / voxelSize);
 			dimensions.z = (uint32_t)ceilf(diff.z() / voxelSize);
 			
-			thrust::device_vector<int> volume(dimensions.x * dimensions.y * dimensions.z);
-			thrust::fill_n(volume.begin(), dimensions.x * dimensions.y * dimensions.z, 0);
+
+			thrust::device_vector<Voxel> volume(dimensions.x * dimensions.y * dimensions.z);
+			Voxel defaultVoxel;
+			thrust::fill_n(volume.begin(), dimensions.x * dimensions.y * dimensions.z, defaultVoxel);
 			auto d_volume = thrust::raw_pointer_cast(volume.data());
 
-			t = Time::Now();
-			nvtxRangePushA("Insert Points");
-			thrust::for_each(
-				patchBuffers.inputPoints.begin(), patchBuffers.inputPoints.end(),
-				[=] __device__(const Eigen::Vector3f& point) {
-				auto index = GetIndex(center, dimensions, voxelSize, point);
-				if (-1 == index.x || -1 == index.y || -1 == index.z) return;
-				auto flatIndex = GetFlatIndex(index, dimensions);
-				d_volume[flatIndex] += 1;
-			});
-			nvtxRangePop();
-			t = Time::End(t, "Insert Points");
-
-			// Add cubes where volume value is not zero
-			nvtxRangePushA("Add Cubes");
-			thrust::host_vector<int> h_volume = volume; // Copy device vector to host
-			for (uint32_t z = 0; z < dimensions.z; ++z)
 			{
-				for (uint32_t y = 0; y < dimensions.y; ++y)
+				t = Time::Now();
+				nvtxRangePushA("Insert Points");
+				thrust::for_each(
+					thrust::make_zip_iterator(thrust::make_tuple(patchBuffers.inputPoints.begin(), patchBuffers.inputNormals.begin())),
+					thrust::make_zip_iterator(thrust::make_tuple(patchBuffers.inputPoints.end(), patchBuffers.inputNormals.end())),
+					[=] __device__(thrust::tuple<Eigen::Vector3f, Eigen::Vector3f> t) {
+					Eigen::Vector3f point = thrust::get<0>(t);
+					Eigen::Vector3f normal = thrust::get<1>(t);
+
+					auto index = GetIndex(center, dimensions, voxelSize, point);
+					if (index.x == UINT_MAX || index.y == UINT_MAX || index.z == UINT_MAX) return;
+
+					auto flatIndex = GetFlatIndex(index, dimensions);
+
+					atomicAdd(&(d_volume[flatIndex].normal.x()), normal.x());
+					atomicAdd(&(d_volume[flatIndex].normal.y()), normal.y());
+					atomicAdd(&(d_volume[flatIndex].normal.z()), normal.z());
+					atomicAdd(&(d_volume[flatIndex].weight), 1);
+				});
+				nvtxRangePop();
+				t = Time::End(t, "Insert Points");
+			}
+
+			{
+				t = Time::Now();
+				nvtxRangePushA("Compute Divergence");
+				thrust::for_each(thrust::counting_iterator((size_t)0), thrust::counting_iterator(volume.size()),
+					[=] __device__(size_t index) {
+					size_t indexZ = index / (dimensions.y * dimensions.x);
+					size_t indexY = (index % (dimensions.y * dimensions.x)) / dimensions.x;
+					size_t indexX = (index % (dimensions.y * dimensions.x)) % dimensions.x;
+
+					Voxel& cv = d_volume[index];
+
+					size_t piX = indexX; if (indexX > 0) piX--;
+					size_t niX = indexX; if (indexX < dimensions.x - 1) niX++;
+					size_t piY = indexY; if (indexY > 0) piY--;
+					size_t niY = indexY; if (indexY < dimensions.y - 1) niY++;
+					size_t piZ = indexZ; if (indexZ > 0) piZ--;
+					size_t niZ = indexZ; if (indexZ < dimensions.z - 1) niZ++;
+
+					uint3 indexP = make_uint3(piX, piY, piZ);
+					size_t flatIndexP = GetFlatIndex(indexP, dimensions);
+					Voxel& pv = d_volume[flatIndexP];
+
+					uint3 indexN = make_uint3(niX, niY, niZ);
+					size_t flatIndexN = GetFlatIndex(indexN, dimensions);
+					Voxel& nv = d_volume[flatIndexN];
+
+					Eigen::Vector3f dn = (nv.normal / (float)nv.weight - pv.normal / (float)pv.weight) / (2.0f * voxelSize);
+					cv.divergence = dn.x() + dn.y() + dn.z();
+				});
+				nvtxRangePop();
+				t = Time::End(t, "Compute Divergence");
+			}
+
+			{
+				// Add cubes where volume value is not zero
+				nvtxRangePushA("Add Cubes");
+				thrust::host_vector<Voxel> h_volume = volume; // Copy device vector to host
+				for (uint32_t z = 0; z < dimensions.z; ++z)
 				{
-					for (uint32_t x = 0; x < dimensions.x; ++x)
+					for (uint32_t y = 0; y < dimensions.y; ++y)
 					{
-						uint3 index = make_uint3(x, y, z);
-						size_t flatIndex = GetFlatIndex(index, dimensions);
-						if (h_volume[flatIndex] > 0) // Only add cubes where the count is greater than 0
+						for (uint32_t x = 0; x < dimensions.x; ++x)
 						{
-							Eigen::Vector3f position = GetPosition(center, dimensions, voxelSize, index);
-							VD::AddCube("volume", position, { voxelSize, voxelSize, voxelSize },
-								{ 0.0f, 0.0f, 1.0f }, Color4::FromNormalized(0.0f, 0.5f, 1.0f, 0.5f));
+							uint3 index = make_uint3(x, y, z);
+							size_t flatIndex = GetFlatIndex(index, dimensions);
+							if (h_volume[flatIndex].weight > 0) // Only add cubes where the count is greater than 0
+							{
+								Eigen::Vector3f position = GetPosition(center, dimensions, voxelSize, index);
+								VD::AddCube("volume", position, { voxelSize, voxelSize, voxelSize },
+									{ 0.0f, 0.0f, 1.0f }, Color4::FromNormalized(0.0f, 0.5f, 1.0f, 0.5f));
+							}
 						}
 					}
 				}
+				nvtxRangePop();
+				t = Time::End(t, "Add Cubes");
 			}
-			nvtxRangePop();
-			t = Time::End(t, "Add Cubes");
 		}
 	}
 }

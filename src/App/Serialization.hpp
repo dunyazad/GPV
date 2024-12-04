@@ -1201,13 +1201,13 @@ public:
 		return true;
 	}
 
-	virtual bool SerializeAsync(const string& filename)
-	{
-		async(launch::async, [&, filename]() {
-			Serialize(filename);
-			});
-		return true;
-	}
+	//virtual bool SerializeAsync(const string& filename)
+	//{
+	//	async(launch::async, [&, filename]() {
+	//		Serialize(filename);
+	//		});
+	//	return true;
+	//}
 
 	inline const vector<float>& GetNormals() const { return normals; }
 	inline const vector<unsigned int>& GetIndices() const { return indices; }
