@@ -45,12 +45,12 @@ namespace CUDA
 				cudaMemcpyHostToDevice);
 
 			cudaMemcpy(thrust::raw_pointer_cast(inputNormals.data()),
-				ply.GetPoints().data(),
+				ply.GetNormals().data(),
 				sizeof(Eigen::Vector3f) * numberOfInputPoints,
 				cudaMemcpyHostToDevice);
 
 			cudaMemcpy(thrust::raw_pointer_cast(inputColors.data()),
-				ply.GetPoints().data(),
+				ply.GetColors().data(),
 				sizeof(Eigen::Vector3f) * numberOfInputPoints,
 				cudaMemcpyHostToDevice);
 
@@ -78,8 +78,7 @@ namespace CUDA
 		{
 			Eigen::Vector3f normal;
 			int weight;
-			float divergence;
-			__host__ __device__ Voxel() : normal(0.0f, 0.0f, 0.0f), weight(0), divergence(FLT_MAX) {}
+			__host__ __device__ Voxel() : normal(0.0f, 0.0f, 0.0f), weight(0) {}
 		};
 
 		__host__ __device__
@@ -172,11 +171,22 @@ namespace CUDA
 			return index.z * dimensions.x * dimensions.y + index.y * dimensions.x + index.x;
 		}
 
-		__host__ __device__ bool ShouldAddCube(const Voxel& voxel) {
-			if (voxel.divergence == FLT_MAX) {
-				return false;
+		cusolverSpHandle_t cusolverHandle;
+
+		void InitializeCuSolver()
+		{
+			// cuSolver 핸들 초기화
+			cusolverStatus_t status = cusolverSpCreate(&cusolverHandle);
+			if (status != CUSOLVER_STATUS_SUCCESS) {
+				cerr << "Failed to create cuSolver handle" << endl;
+				exit(EXIT_FAILURE);
 			}
-			return fabsf(voxel.divergence) <= 1.0f;
+		}
+
+		void DestroyCuSolver()
+		{
+			// cuSolver 핸들 해제
+			cusolverSpDestroy(cusolverHandle);
 		}
 
 		void TestPSR()
@@ -198,127 +208,304 @@ namespace CUDA
 
 			t = Time::End(t, "Copy data to device");
 
-			Eigen::Vector3f min(-10.0f, -10.0f, -10.0f);
-			Eigen::Vector3f max(10.0f, 10.0f, 10.0f);
-			//Eigen::Vector3f min(-75.0f, -75.0f, -75.0f);
-			//Eigen::Vector3f max(75.0f, 75.0f, 75.0f);
-			Eigen::Vector3f diff = max - min;
-			Eigen::Vector3f center = (max + min) * 0.5f;
+			Eigen::Vector3f total_min(-17.5f, -17.5f, -17.5f);
+			Eigen::Vector3f total_max(17.5f, 17.5f, 17.5f);
+			//Eigen::Vector3f total_min(-50.0f, -50.0f, -50.0f);
+			//Eigen::Vector3f total_max(50.0f, 50.0f, 50.0f);
+			Eigen::Vector3f total_diff = total_max - total_min;
+			Eigen::Vector3f total_center = (total_max + total_min) * 0.5f;
 			float voxelSize = 0.1f;
-			uint3 dimensions;
-			dimensions.x = (uint32_t)ceilf(diff.x() / voxelSize);
-			dimensions.y = (uint32_t)ceilf(diff.y() / voxelSize);
-			dimensions.z = (uint32_t)ceilf(diff.z() / voxelSize);
-			
 
-			thrust::device_vector<Voxel> volume(dimensions.x * dimensions.y * dimensions.z);
-			Voxel defaultVoxel;
-			thrust::fill_n(volume.begin(), dimensions.x * dimensions.y * dimensions.z, defaultVoxel);
+			uint3 total_dimensions;
+			total_dimensions.x = (uint32_t)ceilf(total_diff.x() / voxelSize);
+			total_dimensions.y = (uint32_t)ceilf(total_diff.y() / voxelSize);
+			total_dimensions.z = (uint32_t)ceilf(total_diff.z() / voxelSize);
+
+			thrust::device_vector<Voxel> volume(total_dimensions.x / 2 * total_dimensions.y / 2 * total_dimensions.z / 2);
 			auto d_volume = thrust::raw_pointer_cast(volume.data());
+			thrust::device_vector<float> divergences(total_dimensions.x / 2 * total_dimensions.y / 2 * total_dimensions.z / 2);
+			auto d_divergences = thrust::raw_pointer_cast(divergences.data());
+			thrust::device_vector<float> potentials(total_dimensions.x / 2 * total_dimensions.y / 2 * total_dimensions.z / 2);
+			auto d_potentials = thrust::raw_pointer_cast(potentials.data());
 
+			for (size_t i = 0; i < 8; i++)
 			{
-				t = Time::Now();
-				nvtxRangePushA("Insert Points");
-				thrust::for_each(
-					thrust::make_zip_iterator(thrust::make_tuple(patchBuffers.inputPoints.begin(), patchBuffers.inputNormals.begin())),
-					thrust::make_zip_iterator(thrust::make_tuple(patchBuffers.inputPoints.end(), patchBuffers.inputNormals.end())),
-					[=] __device__(thrust::tuple<Eigen::Vector3f, Eigen::Vector3f> t) {
-					Eigen::Vector3f point = thrust::get<0>(t);
-					Eigen::Vector3f normal = thrust::get<1>(t);
+				float minX = 0.0f;
+				float maxX = 0.0f;
+				float minY = 0.0f;
+				float maxY = 0.0f;
+				float minZ = 0.0f;
+				float maxZ = 0.0f;
 
-					auto index = GetIndex(center, dimensions, voxelSize, point);
-					if (index.x == UINT_MAX || index.y == UINT_MAX || index.z == UINT_MAX) return;
+				if (i & 0b001)
+				{
+					minX = total_center.x();
+					maxX = total_max.x();
+				}
+				else
+				{
+					minX = total_min.x();
+					maxX = total_center.x();
+				}
+				if (i & 0b010)
+				{
+					minY = total_center.y();
+					maxY = total_max.y();
+				}
+				else
+				{
+					minY = total_min.y();
+					maxY = total_center.y();
+				}
+				if (i & 0b100)
+				{
+					minZ = total_center.y();
+					maxZ = total_max.y();
+				}
+				else
+				{
+					minZ = total_min.y();
+					maxZ = total_center.y();
+				}
 
-					auto flatIndex = GetFlatIndex(index, dimensions);
+				Eigen::Vector3f min(minX, minY, minZ);
+				Eigen::Vector3f max(maxX, maxY, maxZ);
+				Eigen::Vector3f diff = max - min;
+				Eigen::Vector3f center = (max + min) * 0.5f;
 
-					atomicAdd(&(d_volume[flatIndex].normal.x()), normal.x());
-					atomicAdd(&(d_volume[flatIndex].normal.y()), normal.y());
-					atomicAdd(&(d_volume[flatIndex].normal.z()), normal.z());
-					atomicAdd(&(d_volume[flatIndex].weight), 1);
-				});
-				nvtxRangePop();
-				t = Time::End(t, "Insert Points");
-			}
+				uint3 dimensions;
+				dimensions.x = (uint32_t)ceilf(diff.x() / voxelSize);
+				dimensions.y = (uint32_t)ceilf(diff.y() / voxelSize);
+				dimensions.z = (uint32_t)ceilf(diff.z() / voxelSize);
 
-			{
-				t = Time::Now();
-				nvtxRangePushA("Compute Divergence");
 				thrust::for_each(thrust::counting_iterator((size_t)0), thrust::counting_iterator(volume.size()),
 					[=] __device__(size_t index) {
-					size_t indexZ = index / (dimensions.y * dimensions.x);
-					size_t indexY = (index % (dimensions.y * dimensions.x)) / dimensions.x;
-					size_t indexX = (index % (dimensions.y * dimensions.x)) % dimensions.x;
-
-					Voxel cv = d_volume[index];  // 현재 복셀 값 복사
-
-					// 경계 조건에 따른 이전/다음 인덱스 계산
-					size_t piX = (indexX > 0) ? indexX - 1 : indexX;
-					size_t niX = (indexX < dimensions.x - 1) ? indexX + 1 : indexX;
-					size_t piY = (indexY > 0) ? indexY - 1 : indexY;
-					size_t niY = (indexY < dimensions.y - 1) ? indexY + 1 : indexY;
-					size_t piZ = (indexZ > 0) ? indexZ - 1 : indexZ;
-					size_t niZ = (indexZ < dimensions.z - 1) ? indexZ + 1 : indexZ;
-
-					// 이전 복셀과 다음 복셀의 인덱스와 데이터 가져오기
-					size_t flatIndexX1 = GetFlatIndex(make_uint3(piX, indexY, indexZ), dimensions);
-					size_t flatIndexX2 = GetFlatIndex(make_uint3(niX, indexY, indexZ), dimensions);
-					size_t flatIndexY1 = GetFlatIndex(make_uint3(indexX, piY, indexZ), dimensions);
-					size_t flatIndexY2 = GetFlatIndex(make_uint3(indexX, niY, indexZ), dimensions);
-					size_t flatIndexZ1 = GetFlatIndex(make_uint3(indexX, indexY, piZ), dimensions);
-					size_t flatIndexZ2 = GetFlatIndex(make_uint3(indexX, indexY, niZ), dimensions);
-
-					// 이웃 복셀의 노멀 벡터와 가중치를 확인하여 유효한 값만 사용
-					Eigen::Vector3f normX1 = d_volume[flatIndexX1].weight > 0 ? d_volume[flatIndexX1].normal / (float)d_volume[flatIndexX1].weight : Eigen::Vector3f(0.0f, 0.0f, 0.0f);
-					Eigen::Vector3f normX2 = d_volume[flatIndexX2].weight > 0 ? d_volume[flatIndexX2].normal / (float)d_volume[flatIndexX2].weight : Eigen::Vector3f(0.0f, 0.0f, 0.0f);
-					Eigen::Vector3f normY1 = d_volume[flatIndexY1].weight > 0 ? d_volume[flatIndexY1].normal / (float)d_volume[flatIndexY1].weight : Eigen::Vector3f(0.0f, 0.0f, 0.0f);
-					Eigen::Vector3f normY2 = d_volume[flatIndexY2].weight > 0 ? d_volume[flatIndexY2].normal / (float)d_volume[flatIndexY2].weight : Eigen::Vector3f(0.0f, 0.0f, 0.0f);
-					Eigen::Vector3f normZ1 = d_volume[flatIndexZ1].weight > 0 ? d_volume[flatIndexZ1].normal / (float)d_volume[flatIndexZ1].weight : Eigen::Vector3f(0.0f, 0.0f, 0.0f);
-					Eigen::Vector3f normZ2 = d_volume[flatIndexZ2].weight > 0 ? d_volume[flatIndexZ2].normal / (float)d_volume[flatIndexZ2].weight : Eigen::Vector3f(0.0f, 0.0f, 0.0f);
-
-					// 발산 계산 (중심 차분 방식)
-					float divX = (normX2.x() - normX1.x()) / (2.0f * voxelSize);
-					float divY = (normY2.y() - normY1.y()) / (2.0f * voxelSize);
-					float divZ = (normZ2.z() - normZ1.z()) / (2.0f * voxelSize);
-
-					// 발산 결과를 현재 복셀에 저장
-					cv.divergence = divX + divY + divZ;
-
-					// 결과를 다시 d_volume에 저장
-					d_volume[index] = cv;
+					d_volume[index].normal = Eigen::Vector3f(0.0f, 0.0f, 0.0f);
+					d_volume[index].weight = 0;
+					d_divergences[index] = 0.0f;
+					d_potentials[index] = 0.0f;
 				});
-				nvtxRangePop();
-				t = Time::End(t, "Compute Divergence");
-			}
 
-			{
-				// Add cubes where volume value is not zero
-				nvtxRangePushA("Add Cubes");
-				thrust::host_vector<Voxel> h_volume = volume; // Copy device vector to host
-				for (uint32_t z = 0; z < dimensions.z; ++z)
 				{
-					for (uint32_t y = 0; y < dimensions.y; ++y)
-					{
-						for (uint32_t x = 0; x < dimensions.x; ++x)
-						{
-							uint3 index = make_uint3(x, y, z);
-							size_t flatIndex = GetFlatIndex(index, dimensions);
-							Voxel& voxel = h_volume[flatIndex];
+					t = Time::Now();
+					nvtxRangePushA("Insert Points");
+					thrust::for_each(
+						thrust::make_zip_iterator(thrust::make_tuple(patchBuffers.inputPoints.begin(), patchBuffers.inputNormals.begin())),
+						thrust::make_zip_iterator(thrust::make_tuple(patchBuffers.inputPoints.end(), patchBuffers.inputNormals.end())),
+						[=] __device__(thrust::tuple<Eigen::Vector3f, Eigen::Vector3f> t) {
+						Eigen::Vector3f point = thrust::get<0>(t);
+						Eigen::Vector3f normal = thrust::get<1>(t);
 
-							// 발산 값이 유효한지 확인하는 조건 강화
-							if (!isnan(voxel.divergence) && voxel.divergence != FLT_MAX)
+						auto index = GetIndex(center, dimensions, voxelSize, point);
+						if (index.x == UINT_MAX || index.y == UINT_MAX || index.z == UINT_MAX) return;
+
+						auto flatIndex = GetFlatIndex(index, dimensions);
+
+						atomicAdd(&(d_volume[flatIndex].normal.x()), normal.x());
+						atomicAdd(&(d_volume[flatIndex].normal.y()), normal.y());
+						atomicAdd(&(d_volume[flatIndex].normal.z()), normal.z());
+						atomicAdd(&(d_volume[flatIndex].weight), 1);
+					});
+					nvtxRangePop();
+					t = Time::End(t, "Insert Points");
+				}
+
+				{
+					t = Time::Now();
+					nvtxRangePushA("Compute Divergence");
+					thrust::for_each(thrust::counting_iterator((size_t)0), thrust::counting_iterator(volume.size()),
+						[=] __device__(size_t index) {
+						size_t indexZ = index / (dimensions.y * dimensions.x);
+						size_t indexY = (index % (dimensions.y * dimensions.x)) / dimensions.x;
+						size_t indexX = (index % (dimensions.y * dimensions.x)) % dimensions.x;
+
+						Voxel cv = d_volume[index];  // 현재 복셀 값 복사
+
+						// 경계 조건에 따른 이전/다음 인덱스 계산
+						size_t piX = (indexX > 0) ? indexX - 1 : indexX;
+						size_t niX = (indexX < dimensions.x - 1) ? indexX + 1 : indexX;
+						size_t piY = (indexY > 0) ? indexY - 1 : indexY;
+						size_t niY = (indexY < dimensions.y - 1) ? indexY + 1 : indexY;
+						size_t piZ = (indexZ > 0) ? indexZ - 1 : indexZ;
+						size_t niZ = (indexZ < dimensions.z - 1) ? indexZ + 1 : indexZ;
+
+						// 이전 복셀과 다음 복셀의 인덱스와 데이터 가져오기
+						size_t flatIndexX1 = GetFlatIndex(make_uint3(piX, indexY, indexZ), dimensions);
+						size_t flatIndexX2 = GetFlatIndex(make_uint3(niX, indexY, indexZ), dimensions);
+						size_t flatIndexY1 = GetFlatIndex(make_uint3(indexX, piY, indexZ), dimensions);
+						size_t flatIndexY2 = GetFlatIndex(make_uint3(indexX, niY, indexZ), dimensions);
+						size_t flatIndexZ1 = GetFlatIndex(make_uint3(indexX, indexY, piZ), dimensions);
+						size_t flatIndexZ2 = GetFlatIndex(make_uint3(indexX, indexY, niZ), dimensions);
+
+						// 이웃 복셀의 노멀 벡터와 가중치를 확인하여 유효한 값만 사용
+						Eigen::Vector3f normX1 = d_volume[flatIndexX1].weight > 0 ? d_volume[flatIndexX1].normal / (float)d_volume[flatIndexX1].weight : Eigen::Vector3f(0.0f, 0.0f, 0.0f);
+						Eigen::Vector3f normX2 = d_volume[flatIndexX2].weight > 0 ? d_volume[flatIndexX2].normal / (float)d_volume[flatIndexX2].weight : Eigen::Vector3f(0.0f, 0.0f, 0.0f);
+						Eigen::Vector3f normY1 = d_volume[flatIndexY1].weight > 0 ? d_volume[flatIndexY1].normal / (float)d_volume[flatIndexY1].weight : Eigen::Vector3f(0.0f, 0.0f, 0.0f);
+						Eigen::Vector3f normY2 = d_volume[flatIndexY2].weight > 0 ? d_volume[flatIndexY2].normal / (float)d_volume[flatIndexY2].weight : Eigen::Vector3f(0.0f, 0.0f, 0.0f);
+						Eigen::Vector3f normZ1 = d_volume[flatIndexZ1].weight > 0 ? d_volume[flatIndexZ1].normal / (float)d_volume[flatIndexZ1].weight : Eigen::Vector3f(0.0f, 0.0f, 0.0f);
+						Eigen::Vector3f normZ2 = d_volume[flatIndexZ2].weight > 0 ? d_volume[flatIndexZ2].normal / (float)d_volume[flatIndexZ2].weight : Eigen::Vector3f(0.0f, 0.0f, 0.0f);
+
+						// 발산 계산 (중심 차분 방식 - 경계에서는 단측 차분 사용)
+						float divX = 0.0f, divY = 0.0f, divZ = 0.0f;
+
+						if (indexX > 0 && indexX < dimensions.x - 1) {
+							divX = (normX2.x() - normX1.x()) / (2.0f * voxelSize);
+						}
+						else if (indexX == 0) {
+							divX = (normX2.x() - cv.normal.x()) / voxelSize;
+						}
+						else if (indexX == dimensions.x - 1) {
+							divX = (cv.normal.x() - normX1.x()) / voxelSize;
+						}
+
+						// Y와 Z 축에 대해서도 동일하게 처리
+						if (indexY > 0 && indexY < dimensions.y - 1) {
+							divY = (normY2.y() - normY1.y()) / (2.0f * voxelSize);
+						}
+						else if (indexY == 0) {
+							divY = (normY2.y() - cv.normal.y()) / voxelSize;
+						}
+						else if (indexY == dimensions.y - 1) {
+							divY = (cv.normal.y() - normY1.y()) / voxelSize;
+						}
+
+						if (indexZ > 0 && indexZ < dimensions.z - 1) {
+							divZ = (normZ2.z() - normZ1.z()) / (2.0f * voxelSize);
+						}
+						else if (indexZ == 0) {
+							divZ = (normZ2.z() - cv.normal.z()) / voxelSize;
+						}
+						else if (indexZ == dimensions.z - 1) {
+							divZ = (cv.normal.z() - normZ1.z()) / voxelSize;
+						}
+
+						// 발산 결과 계산 및 저장
+						d_divergences[index] = divX + divY + divZ;
+
+						// 결과를 다시 d_volume에 저장
+						d_volume[index] = cv;
+					});
+					nvtxRangePop();
+					t = Time::End(t, "Compute Divergence");
+				}
+
+				{
+					//// Solving Poisson System for Potentials
+					//t = Time::Now();
+					//nvtxRangePushA("SolvePoissonWithCuSolver");
+
+					//// Prepare CSR matrix and vectors for cuSolver
+					//int numRows = dimensions.x * dimensions.y * dimensions.z;
+					//int nnz = numRows * 7; // Adjust as needed
+
+					//thrust::device_vector<int> rowPtr(numRows + 1);
+					//thrust::device_vector<int> colInd(nnz);
+					//thrust::device_vector<float> values(nnz);
+					//thrust::device_vector<float> b(volume.size());
+
+					//// Example: Initialization (constructing a CSR matrix is context-specific)
+					//thrust::host_vector<int> h_rowPtr(numRows + 1, 0);
+					//for (int i = 0; i < numRows; i++) {
+					//	h_rowPtr[i] = i * 7; // Example increment, adjust accordingly
+					//}
+					//h_rowPtr[numRows] = nnz;
+
+					//// Copy rowPtr to device
+					//rowPtr = h_rowPtr;
+
+					//// Fill divergence vector `b`
+					//thrust::transform(volume.begin(), volume.end(), b.begin(), [] __device__(const Voxel & voxel) {
+					//	return (voxel.divergence != FLT_MAX) ? voxel.divergence : 0.0f;
+					//});
+
+					//// Create matrix descriptor
+					//cusparseMatDescr_t descrA;
+					//cusparseCreateMatDescr(&descrA);
+					//cusparseSetMatType(descrA, CUSPARSE_MATRIX_TYPE_GENERAL);
+					//cusparseSetMatIndexBase(descrA, CUSPARSE_INDEX_BASE_ZERO);
+
+					//// Get raw pointers from device vectors
+					//int* d_rowPtr = thrust::raw_pointer_cast(rowPtr.data());
+					//int* d_colInd = thrust::raw_pointer_cast(colInd.data());
+					//float* d_values = thrust::raw_pointer_cast(values.data());
+					//float* d_b = thrust::raw_pointer_cast(b.data());
+					//thrust::device_vector<float> d_potentials(volume.size());
+					//float* d_phi = thrust::raw_pointer_cast(d_potentials.data());
+
+					//int singularity;
+					//cusolverStatus_t status = cusolverSpScsrlsvqr(
+					//	cusolverHandle,
+					//	numRows,
+					//	nnz,
+					//	descrA,
+					//	d_values,
+					//	d_rowPtr,
+					//	d_colInd,
+					//	d_b,
+					//	1e-10,
+					//	0,
+					//	d_phi,
+					//	&singularity
+					//);
+
+					//if (status != CUSOLVER_STATUS_SUCCESS) {
+					//	printf("Solver failed with status code %d\n", status);
+					//}
+
+					//if (singularity >= 0) {
+					//	printf("The matrix is singular at row %d\n", singularity);
+					//}
+
+					//nvtxRangePop();
+					//t = Time::End(t, "SolvePoissonWithCuSolver");
+
+					//nvtxRangePushA("Update voxel potentials");
+					//// Update voxel potentials
+					//thrust::for_each(
+					//	thrust::counting_iterator<size_t>(0),
+					//	thrust::counting_iterator<size_t>(volume.size()),
+					//	[=] __device__(size_t index) mutable {
+					//	Voxel voxel = volume[index];
+					//	voxel.potential = d_potentials[index];
+					//	volume[index] = voxel;
+					//});
+					//nvtxRangePop();
+					//t = Time::End(t, "Update voxel potentials");
+				}
+
+				{
+					// Add cubes where volume value is not zero
+					nvtxRangePushA("Add Cubes");
+					thrust::host_vector<Voxel> h_volume = volume; // Copy device vector to host
+					thrust::host_vector<float> h_divergences = divergences; // Copy device vector to host
+
+					for (uint32_t z = 0; z < dimensions.z; ++z)
+					{
+						for (uint32_t y = 0; y < dimensions.y; ++y)
+						{
+							for (uint32_t x = 0; x < dimensions.x; ++x)
 							{
-								if (fabsf(voxel.divergence) > 0.0f)  // 발산 값이 일정 범위 내에 있는 경우에만 큐브 추가
+								uint3 index = make_uint3(x, y, z);
+								size_t flatIndex = GetFlatIndex(index, dimensions);
+								Voxel& voxel = h_volume[flatIndex];
+								float divergence = h_divergences[flatIndex];
+
+								// 발산 값이 유효한지 확인하는 조건 강화
+								if (!isnan(divergence) && divergence != FLT_MAX)
 								{
-									Eigen::Vector3f position = GetPosition(center, dimensions, voxelSize, index);
-									VD::AddCube("volume", position, { voxelSize, voxelSize, voxelSize },
-										{ 0.0f, 0.0f, 1.0f }, Color4::White);
+									if (fabsf(divergence) > 0.0f)  // 발산 값이 일정 범위 내에 있는 경우에만 큐브 추가
+									{
+										Eigen::Vector3f position = GetPosition(center, dimensions, voxelSize, index);
+										VD::AddCube("volume", position, { voxelSize, voxelSize, voxelSize },
+											{ 0.0f, 0.0f, 1.0f }, Color4::White);
+									}
 								}
 							}
 						}
 					}
+					nvtxRangePop();
+					t = Time::End(t, "Add Cubes");
 				}
-				nvtxRangePop();
-				t = Time::End(t, "Add Cubes");
 			}
 		}
 	}
