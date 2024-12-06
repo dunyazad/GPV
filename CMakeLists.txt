@@ -147,10 +147,12 @@ target_link_libraries(GPV
     ${HDIAPI_LIBRARIES}
     CUDA::cudart CUDA::cuda_driver
     CUDA::cusolver CUDA::cusparse
+    CUDA::cufft
 )
 
 target_link_libraries(cuda_objects PRIVATE
     ${VTK_LIBRARIES}
+    CUDA::cufft
 )
 
 target_compile_options(cuda_objects PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--extended-lambda>)

@@ -16,6 +16,7 @@
 
 #include <cusolverSp.h>
 #include <cusparse.h>
+#include <cufft.h>
 
 #include <thrust/async/for_each.h>
 #include <thrust/async/reduce.h>
