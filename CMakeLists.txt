@@ -47,6 +47,8 @@ set(cuda_source_list
     src/CUDA/CUDA.cu
     src/CUDA/HashMap.cuh
     src/CUDA/HashMap.cu
+    src/CUDA/MarchingCubes.cuh
+    src/CUDA/MarchingCubes.cu
     src/CUDA/Octree.cuh
     src/CUDA/Octree.cu
     src/CUDA/PSR.cuh
@@ -78,6 +80,7 @@ set(source_list
     src/App/AppStartCallback_Capture.cpp
     src/App/AppStartCallback_HashMap.cpp
     src/App/AppStartCallback_Integrate.cpp
+    src/App/AppStartCallback_MC.cpp
     src/App/AppStartCallback_Octree.cpp
     src/App/AppStartCallback_PSR.cpp
     src/App/AppStartCallback_RegularGrid.cpp

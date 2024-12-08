@@ -11,6 +11,7 @@
 #include <cuda_runtime.h>
 #include <curand_kernel.h>
 #include <cooperative_groups.h>
+#include <device_launch_parameters.h>
 #include <vector_types.h>
 #include <nvtx3/nvToolsExt.h>
 
@@ -44,6 +45,7 @@
 #include <thrust/sequence.h>
 #include <thrust/set_operations.h>
 #include <thrust/sort.h>
+#include <thrust/system/cuda/execution_policy.h>
 #include <thrust/transform.h>
 #include <thrust/transform_reduce.h>
 #include <thrust/transform_scan.h>

@@ -179,7 +179,7 @@ void AppStartCallback_Integrate(App* pApp)
 	uint3 volumeDimension = make_uint3(volumeDimensionX, volumeDimensionY, volumeDimensionZ);
 
 	CUDA::cuCache::Voxel* volume;
-	cudaMallocManaged(&volume, sizeof(CUDA::Voxel) * volumeDimensionX * volumeDimensionY * volumeDimensionZ);
+	cudaMallocManaged(&volume, sizeof(CUDA::RegularGrid::Voxel) * volumeDimensionX * volumeDimensionY * volumeDimensionZ);
 	cudaDeviceSynchronize();
 
 	Eigen::Vector3f* inputPoints = nullptr;

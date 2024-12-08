@@ -11,5 +11,5 @@ void AppStartCallback_RegularGrid(App* pApp)
 
 	//LoadModel(pApp->GetRenderer(), "C:\\Resources\\3D\\PLY\\Complete\\Lower.ply");
 
-	CUDA::TestRegularGrid();
+	CUDA::RegularGrid::TestRegularGrid();
 }

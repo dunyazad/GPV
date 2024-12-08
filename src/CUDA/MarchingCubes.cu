@@ -1,4 +1,4 @@
-#include "PSR.cuh"
+#include "MarchingCubes.cuh"
 
 #include <vtkHeaderFiles.h>
 
@@ -9,7 +9,7 @@ using VD = VisualDebugging;
 
 namespace CUDA
 {
-	namespace PSR
+	namespace MarchingCubes
 	{
 #pragma region PatchBuffers
 		PatchBuffers::PatchBuffers(int width, int height)
@@ -182,48 +182,53 @@ namespace CUDA
 				z == dimensions.z - 1);
 		}
 
-		// 행렬과 벡터의 곱
-		__host__ __device__
-			void matVecMul(const std::vector<float>& A, const std::vector<float>& x, std::vector<float>& b, int size) {
-			for (int i = 0; i < size; ++i) {
-				b[i] = 0;
-				for (int j = 0; j < size; ++j) {
-					b[i] += A[i * size + j] * x[j];
-				}
+		cusolverSpHandle_t cusolverHandle;
+		cusparseMatDescr_t descrA;
+
+		void InitializeCuSolver()
+		{
+			// cuSolver 핸들 초기화
+			cusolverStatus_t status = cusolverSpCreate(&cusolverHandle);
+			if (status != CUSOLVER_STATUS_SUCCESS) {
+				cerr << "Failed to create cuSolver handle" << endl;
+				exit(EXIT_FAILURE);
+			}
+
+			// cuSparse 행렬 설명자 초기화
+			cusparseStatus_t cusparseStatus = cusparseCreateMatDescr(&descrA);
+			if (cusparseStatus != CUSPARSE_STATUS_SUCCESS) {
+				cerr << "Failed to create cuSparse matrix descriptor" << endl;
+				exit(EXIT_FAILURE);
+			}
+
+			cusparseSetMatType(descrA, CUSPARSE_MATRIX_TYPE_GENERAL);
+			cusparseSetMatIndexBase(descrA, CUSPARSE_INDEX_BASE_ZERO);
+		}
+
+		void DestroyCuSolver()
+		{
+			cusparseDestroyMatDescr(descrA);
+			cusolverSpDestroy(cusolverHandle);
+		}
+
+
+		void CheckCusolverStatus(cusolverStatus_t status, const char* msg)
+		{
+			if (status != CUSOLVER_STATUS_SUCCESS) {
+				std::cerr << "CUSOLVER ERROR: " << msg << " (status code: " << status << ")" << std::endl;
+				exit(EXIT_FAILURE);
 			}
 		}
 
-		// 직접 해법: 가우스 소거법
-		__host__ __device__
-			void gaussSolve(float* A, float* x, float* b, int size) {
-			for (int i = 0; i < size; ++i) {
-				// 대각선 요소를 1로 만듦
-				float diag = A[i * size + i];
-				for (int j = 0; j < size; ++j) {
-					A[i * size + j] /= diag;
-				}
-				b[i] /= diag;
-
-				// 다른 행 제거
-				for (int k = i + 1; k < size; ++k) {
-					float factor = A[k * size + i];
-					for (int j = 0; j < size; ++j) {
-						A[k * size + j] -= factor * A[i * size + j];
-					}
-					b[k] -= factor * b[i];
-				}
-			}
-
-			// 역방향 대입
-			for (int i = size - 1; i >= 0; --i) {
-				x[i] = b[i];
-				for (int j = i + 1; j < size; ++j) {
-					x[i] -= A[i * size + j] * x[j];
-				}
+		void CheckCusparseStatus(cusparseStatus_t status, const char* msg)
+		{
+			if (status != CUSPARSE_STATUS_SUCCESS) {
+				std::cerr << "CUSPARSE ERROR: " << msg << " (status code: " << status << ")" << std::endl;
+				exit(EXIT_FAILURE);
 			}
 		}
 
-		void TestPSR()
+		void TestMarchingCubes()
 		{
 			auto t = Time::Now();
 
@@ -241,6 +246,8 @@ namespace CUDA
 			patchBuffers.FromPLYFile(ply);
 
 			t = Time::End(t, "Copy data to device");
+
+			InitializeCuSolver();
 
 			/*Eigen::Vector3f total_min(-17.5f, -17.5f, -17.5f);
 			Eigen::Vector3f total_max(17.5f, 17.5f, 17.5f);*/
@@ -505,272 +512,167 @@ namespace CUDA
 					t = Time::Now();
 					nvtxRangePushA("Compute Potential");
 
-					// 라플라스 방정식의 연산을 직접 수행
-					thrust::for_each(thrust::counting_iterator<size_t>(0), thrust::counting_iterator<size_t>(numberOfVoxels),
-						[=] __device__(size_t idx) {
-						//printf("%d\n", idx);
+					// Initialize maximum difference for convergence check
+					thrust::device_vector<float> max_diff(1);
 
-						// 3D 인덱스를 계산
-						size_t z = idx / (dimensions.x * dimensions.y);
-						size_t y = (idx / dimensions.x) % dimensions.y;
-						size_t x = idx % dimensions.x;
+					// Iterative solver parameters
+					int max_iterations = 1000;
+					float tolerance = 1e-5;
 
-						//printf("%d %d %d\n", x, y, z);
+					for (int iter = 0; iter < max_iterations; iter++) {
+						max_diff[0] = 1.0f; // Reset max_diff
 
-						// 경계 조건 처리
-						if (x == 0 || x == dimensions.x - 1 || y == 0 || y == dimensions.y - 1 || z == 0 || z == dimensions.z - 1) {
-							// Dirichlet 경계 조건: 경계 포텐셜은 0
-							return;
+						// Update potential using thrust::for_each
+						thrust::for_each(
+							thrust::counting_iterator<size_t>(0),
+							thrust::counting_iterator<size_t>(numberOfVoxels),
+							[=, d_max_diff = thrust::raw_pointer_cast(max_diff.data())] __device__(size_t index) {
+							size_t x = index % dimensions.x;
+							size_t y = (index / dimensions.x) % dimensions.y;
+							size_t z = index / (dimensions.x * dimensions.y);
+
+							// Skip boundary voxels
+							if (x == 0 || x == dimensions.x - 1 ||
+								y == 0 || y == dimensions.y - 1 ||
+								z == 0 || z == dimensions.z - 1) {
+								d_potentials[index] = 1.0f;
+								return;
+							}
+
+							// Compute new potential value
+							float sum_neighbors =
+								d_potentials[GetFlatIndex(make_uint3(x - 1, y, z), dimensions)] +
+								d_potentials[GetFlatIndex(make_uint3(x + 1, y, z), dimensions)] +
+								d_potentials[GetFlatIndex(make_uint3(x, y - 1, z), dimensions)] +
+								d_potentials[GetFlatIndex(make_uint3(x, y + 1, z), dimensions)] +
+								d_potentials[GetFlatIndex(make_uint3(x, y, z - 1), dimensions)] +
+								d_potentials[GetFlatIndex(make_uint3(x, y, z + 1), dimensions)];
+
+							float new_potential = (1.0f / 6.0f) * (sum_neighbors - d_divergences[index]);
+
+							// Compute difference
+							float diff = fabsf(new_potential - d_potentials[index]);
+
+							// Update maximum difference
+							atomicMax(reinterpret_cast<int*>(d_max_diff), __float_as_int(diff));
+
+							// Update the potential value
+							d_potentials[index] = new_potential;
+						});
+
+						// Check convergence
+						float max_diff_host = 0.0f;
+						cudaMemcpy(&max_diff_host, thrust::raw_pointer_cast(max_diff.data()), sizeof(float), cudaMemcpyDeviceToHost);
+
+						if (max_diff_host < tolerance) {
+							std::cout << "Converged after " << iter + 1 << " iterations with max_diff = " << max_diff_host << std::endl;
+							break;
 						}
-
-						//// 발산값 가져오기
-						float divergence = d_divergences[idx];
-
-						//// 6-연결 이웃에서의 포텐셜 계산
-						float neighborSum = 0.0f;
-						neighborSum += d_potentials[idx - 1];                  // Left
-						neighborSum += d_potentials[idx + 1];                  // Right
-						neighborSum += d_potentials[idx - dimensions.x];           // Bottom
-						neighborSum += d_potentials[idx + dimensions.x];           // Top
-						neighborSum += d_potentials[idx - dimensions.x * dimensions.y]; // Front
-						neighborSum += d_potentials[idx + dimensions.x * dimensions.y]; // Back
-
-						////// 현재 위치의 포텐셜 계산
-						d_potentials[idx] = (neighborSum - divergence * voxelSize * voxelSize) / 6.0f;
-
-						//printf("d_potentials[idx] : %f\n", d_potentials[idx]);
-					});
+					}
 
 					nvtxRangePop();
 					t = Time::End(t, "Compute Potential");
 				}
 
-
-
 				cudaDeviceSynchronize();
 
+				//{
+				//	// Add cubes where volume value is not zero
+				//	nvtxRangePushA("Add Cubes");
+				//	thrust::host_vector<Voxel> h_volume = volume; // Copy device vector to host
+				//	thrust::host_vector<float> h_divergences = divergences; // Copy device vector to host
+				//	thrust::host_vector<float> h_potentials = potentials; // Copy device vector to host
+
+				//	for (uint32_t z = 0; z < dimensions.z; ++z)
+				//	{
+				//		for (uint32_t y = 0; y < dimensions.y; ++y)
+				//		{
+				//			for (uint32_t x = 0; x < dimensions.x; ++x)
+				//			{
+				//				uint3 index = make_uint3(x, y, z);
+				//				size_t flatIndex = GetFlatIndex(index, dimensions);
+				//				Voxel& voxel = h_volume[flatIndex];
+				//				float divergence = h_divergences[flatIndex];
+
+				//				// 발산 값이 유효한지 확인하는 조건 강화
+				//				if (!isnan(divergence) && divergence != FLT_MAX)
+				//				{
+				//					if (fabsf(divergence) > 0.05f)  // 발산 값이 일정 범위 내에 있는 경우에만 큐브 추가
+				//					{
+				//						Eigen::Vector3f position = GetPosition(center, dimensions, voxelSize, index);
+				//						VD::AddCube("volume", position, { voxelSize, voxelSize, voxelSize },
+				//							{ 0.0f, 0.0f, 1.0f }, Color4::White);
+				//					}
+				//				}
+				//			}
+				//		}
+				//	}
+				//	nvtxRangePop();
+				//	t = Time::End(t, "Add Cubes");
+				//}
+
 				{
-					// Add cubes where volume value is not zero
-					nvtxRangePushA("Add Cubes");
+					// Add cubes based on potentials
+					nvtxRangePushA("Visualize Potentials");
 					thrust::host_vector<Voxel> h_volume = volume; // Copy device vector to host
 					thrust::host_vector<float> h_divergences = divergences; // Copy device vector to host
 					thrust::host_vector<float> h_potentials = potentials; // Copy device vector to host
 
-					for (uint32_t z = 0; z < dimensions.z; ++z)
+					// Define thresholds for potential visualization
+					//float minThreshold = -0.005f; // Minimum potential value to display
+					//float maxThreshold = 0.005f;  // Maximum potential value to display
+
+					float minPotential = *thrust::min_element(potentials.begin(), potentials.end());
+					float maxPotential = *thrust::max_element(potentials.begin(), potentials.end());
+
+					float minThreshold = minPotential + 0.01f * (maxPotential - minPotential);
+					float maxThreshold = maxPotential - 0.01f * (maxPotential - minPotential);
+
+					for (uint32_t z = 1; z < dimensions.z - 1; ++z)
 					{
-						for (uint32_t y = 0; y < dimensions.y; ++y)
+						for (uint32_t y = 1; y < dimensions.y - 1; ++y)
 						{
-							for (uint32_t x = 0; x < dimensions.x; ++x)
+							for (uint32_t x = 1; x < dimensions.x - 1; ++x)
 							{
 								uint3 index = make_uint3(x, y, z);
 								size_t flatIndex = GetFlatIndex(index, dimensions);
-								Voxel& voxel = h_volume[flatIndex];
-								float divergence = h_divergences[flatIndex];
 
-								// 발산 값이 유효한지 확인하는 조건 강화
-								if (!isnan(divergence) && divergence != FLT_MAX)
+								float potential = h_potentials[flatIndex] * 1000.0f;
+
+								//if (FLT_MAX != potential)
+								//{
+								//	printf("potential : %f\n", potential);
+								//}
+
+								// Check if the potential value is within the threshold range
+								if (!isnan(potential) && potential != FLT_MAX)
 								{
-									if (fabsf(divergence) > 0.05f)  // 발산 값이 일정 범위 내에 있는 경우에만 화살표 추가
+									float normalized = (potential - minThreshold) / (maxThreshold - minThreshold);
+
+									if (minThreshold <= potential && potential <= maxThreshold)
 									{
+										// Get the position of the voxel
 										Eigen::Vector3f position = GetPosition(center, dimensions, voxelSize, index);
-										VD::AddArrow("Divergences", position, voxel.normal, voxelSize, Color4::Red);
+
+										// Normalize the potential to a color scale (e.g., blue to red)
+										float normalized = (potential - minThreshold) / (maxThreshold - minThreshold);
+										Eigen::Vector3f color = { 1.0f - normalized, 0.0f, normalized }; // Red to Blue gradient
+
+										// Add cube
+										VD::AddCube("potentials", position, { voxelSize, voxelSize, voxelSize },
+											{ 0.0f, 0.0f, 1.0f }, Color4::FromNormalized(color.x(), color.y(), color.z(), 1.0f));
 									}
 								}
 							}
 						}
 					}
 					nvtxRangePop();
-					t = Time::End(t, "Add Cubes");
+					t = Time::End(t, "Visualize Potentials");
 				}
 
-				{
-					const float isovalue = 0.5f;
-
-					Eigen::Vector3f gridCenter = (max + min) * 0.5f;
-
-					std::vector<Eigen::Vector3f> vertices;
-					std::vector<Eigen::Vector3f> normals;
-
-					// 삼각형 버퍼를 GPU 메모리에 할당
-					thrust::device_vector<Triangle> triangles(numberOfVoxels * 4);
-					Triangle* d_triangles = thrust::raw_pointer_cast(triangles.data());
-
-					cudaDeviceSynchronize();
-
-					thrust::for_each(thrust::counting_iterator<size_t>(0), thrust::counting_iterator<size_t>(numberOfVoxels),
-						[=] __device__(size_t idx) {
-						if (idx >= numberOfVoxels) return;
-
-						size_t z = idx / (dimensions.x * dimensions.y);
-						size_t y = (idx / dimensions.x) % dimensions.y;
-						size_t x = idx % dimensions.x;
-
-						//printf("%d, %d, %d\n", x, y, z);
-
-						// 8개 코너의 3D 인덱스 계산
-						uint3 cornerIndices[8] = {
-							make_uint3(x, y, z),
-							make_uint3(x + 1, y, z),
-							make_uint3(x + 1, y + 1, z),
-							make_uint3(x, y + 1, z),
-							make_uint3(x, y, z + 1),
-							make_uint3(x + 1, y, z + 1),
-							make_uint3(x + 1, y + 1, z + 1),
-							make_uint3(x, y + 1, z + 1)
-						};
-
-						// 상태 값 계산
-						int cubeIndex = 0;
-						float cornerValues[8];
-						for (int i = 0; i < 8; ++i) {
-							// Get the flat index for the corner
-							size_t flatIndex = GetFlatIndex(cornerIndices[i], dimensions);
-							if (UINT_MAX == flatIndex) continue;
-
-							//// Debugging output to check corner indices and flatIndex
-							//printf("Debug: cornerIndex[%d] = (%u, %u, %u), flatIndex = %llu\n",
-							//	i, cornerIndices[i].x, cornerIndices[i].y, cornerIndices[i].z, flatIndex);
-
-							// Check if the flatIndex is valid
-							if (flatIndex == UINT_MAX) {
-								//printf("Error: flatIndex for cornerIndex[%d] is invalid. Skipping this voxel.\n", i);
-								return; // Skip further processing for this voxel
-							}
-
-							// Ensure flatIndex is within bounds of d_potentials
-							size_t numPotentials = dimensions.x * dimensions.y * dimensions.z;
-							if (flatIndex >= numPotentials) {
-								//printf("Error: flatIndex = %zu is out of bounds (max = %zu). Skipping this voxel.\n",
-								//	flatIndex, numPotentials - 1);
-								return; // Skip further processing for this voxel
-							}
-
-							// Fetch the potential value
-							cornerValues[i] = d_potentials[flatIndex];
-
-							// Check if the potential value is below the isovalue
-							if (cornerValues[i] < isovalue) {
-								cubeIndex |= (1 << i); // Update cube index
-							}
-
-							// Debugging output for potential values
-							//printf("Debug: cornerValues[%d] = %f, cubeIndex = %d\n", i, cornerValues[i], cubeIndex);
-						}
-
-						if (cubeIndex == 0 || edgeTable[cubeIndex] == 0) return;
-
-						//printf("Debug: cubeIndex = %d\n", cubeIndex);
-
-
-						Eigen::Vector3f vertList[12];
-						for (int i = 0; i < 12; ++i) {
-							if (edgeTable[cubeIndex] & (1 << i)) {
-								int v0 = edgeVertexMap[i][0];
-								int v1 = edgeVertexMap[i][1];
-								Eigen::Vector3f p0 = GetPosition(gridCenter, dimensions, voxelSize, cornerIndices[v0]);
-								Eigen::Vector3f p1 = GetPosition(gridCenter, dimensions, voxelSize, cornerIndices[v1]);
-								float val0 = cornerValues[v0];
-								float val1 = cornerValues[v1];
-								float denom = val1 - val0;
-								float t = (denom != 0.0f) ? (isovalue - val0) / denom : 0.5f; // 보간 중간값 사용
-
-								vertList[i] = p0 + t * (p1 - p0);
-
-								//printf("%f, %f, %f\n", vertList[i].x(), vertList[i].y(), vertList[i].z());
-							}
-						}
-
-						for (int i = 0; triTable[cubeIndex][i] != -1; i += 3) {
-							int t0 = triTable[cubeIndex][i];
-							int t1 = triTable[cubeIndex][i + 1];
-							int t2 = triTable[cubeIndex][i + 2];
-
-							//printf("%d %d %d\n", t0, t1, t2);
-
-							printf("%f, %f, %f\n", vertList[t0], vertList[t1], vertList[t2]);
-
-							if (idx < triangles.size()) {
-								d_triangles[idx].v0 = vertList[t0];
-								d_triangles[idx].v1 = vertList[t1];
-								d_triangles[idx].v2 = vertList[t2];
-							}
-						}
-					});
-
-					float minPotential = *thrust::min_element(potentials.begin(), potentials.end());
-					float maxPotential = *thrust::max_element(potentials.begin(), potentials.end());
-					std::cout << "Min potential: " << minPotential << ", Max potential: " << maxPotential << std::endl;
-
-					thrust::host_vector<Triangle> hostTriangles(triangles);
-					for (const auto& tri : hostTriangles)
-					{
-						VD::AddTriangle("marching_cubes", tri.v0, tri.v1, tri.v2, Color4::White);
-					}
-				}
-
-				{
-					//// Add cubes based on potentials
-					//nvtxRangePushA("Visualize Potentials");
-					//thrust::host_vector<Voxel> h_volume = volume; // Copy device vector to host
-					//thrust::host_vector<float> h_divergences = divergences; // Copy device vector to host
-					//thrust::host_vector<float> h_potentials = potentials; // Copy device vector to host
-
-					//// Define thresholds for potential visualization
-					////float minThreshold = -0.005f; // Minimum potential value to display
-					////float maxThreshold = 0.005f;  // Maximum potential value to display
-
-					//float minPotential = *thrust::min_element(potentials.begin(), potentials.end());
-					//float maxPotential = *thrust::max_element(potentials.begin(), potentials.end());
-
-					//float minThreshold = minPotential + 0.01f * (maxPotential - minPotential);
-					//float maxThreshold = maxPotential - 0.01f * (maxPotential - minPotential);
-
-					//for (uint32_t z = 1; z < dimensions.z - 1; ++z)
-					//{
-					//	for (uint32_t y = 1; y < dimensions.y - 1; ++y)
-					//	{
-					//		for (uint32_t x = 1; x < dimensions.x - 1; ++x)
-					//		{
-					//			uint3 index = make_uint3(x, y, z);
-					//			size_t flatIndex = GetFlatIndex(index, dimensions);
-
-					//			float potential = h_potentials[flatIndex];
-
-					//			//if (FLT_MAX != potential && 0.0f != potential)
-					//			//{
-					//			//	printf("potential : %f\n", potential);
-					//			//}
-
-					//			// Check if the potential value is within the threshold range
-					//			if (!isnan(potential) && potential != FLT_MAX)
-					//			{
-					//				float normalized = (potential - minThreshold) / (maxThreshold - minThreshold);
-
-					//				//if (minThreshold <= potential && potential <= maxThreshold)
-					//				if(0.45f < potential && potential <= maxThreshold)
-					//				{
-					//					// Get the position of the voxel
-					//					Eigen::Vector3f position = GetPosition(center, dimensions, voxelSize, index);
-
-					//					// Normalize the potential to a color scale (e.g., blue to red)
-					//					float normalized = (potential - minThreshold) / (maxThreshold - minThreshold);
-					//					//Eigen::Vector3f color = { 1.0f - normalized, 0.0f, normalized }; // Red to Blue gradient
-
-					//					// Add cube
-					//					//VD::AddCube("potentials", position, { voxelSize, voxelSize, voxelSize },
-					//					//	{0.0f, 0.0f, 1.0f}, Color4::FromNormalized(color.x(), color.y(), color.z(), 1.0f));
-
-					//					VD::AddCube("potentials", position, { voxelSize, voxelSize, voxelSize },
-					//						{ 0.0f, 0.0f, 1.0f }, Color4::White);
-					//				}
-					//			}
-					//		}
-					//	}
-					//}
-					//nvtxRangePop();
-					//t = Time::End(t, "Visualize Potentials");
-				}
 			}
+
+			DestroyCuSolver();
 		}
 	}
 }

@@ -6,6 +6,7 @@
 
 #include <CUDA/CUDA.cuh>
 #include <CUDA/HashMap.cuh>
+#include <CUDA/MarchingCubes.cuh>
 #include <CUDA/Octree.cuh>
 #include <CUDA/PSR.cuh>
 #include <CUDA/RegularGrid.cuh>
@@ -56,6 +57,7 @@ bool AppStartCallback(App* pApp);
 void AppStartCallback_Capture(App* pApp);
 void AppStartCallback_HashMap(App* pApp);
 void AppStartCallback_Integrate(App* pApp);
+void AppStartCallback_MarchingCubes(App* pApp);
 void AppStartCallback_Octree(App* pApp);
 void AppStartCallback_PSR(App* pApp);
 void AppStartCallback_RegularGrid(App* pApp);

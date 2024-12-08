@@ -6,7 +6,7 @@
 
 namespace CUDA
 {
-	namespace PSR
+	namespace MarchingCubes
 	{
 		class PatchBuffers
 		{
@@ -26,11 +26,6 @@ namespace CUDA
 			thrust::device_vector<Eigen::Vector3f> inputColors;
 		};
 
-		struct Triangle
-		{
-			Eigen::Vector3f v0, v1, v2;
-		};
-
-		void TestPSR();
+		void TestMarchingCubes();
 	}
 }
