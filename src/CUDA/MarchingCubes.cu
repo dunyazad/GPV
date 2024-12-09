@@ -494,10 +494,11 @@ namespace CUDA
 										float tsdfValue = distance / truncationDistance;
 										tsdfValue = (voxelCenter - point).dot(normal) > 0 ? tsdfValue : -tsdfValue;
 
-										if (1.0f < tsdfValue) tsdfValue = 1.0f;
-										if (-1.0f > tsdfValue) tsdfValue = -1.0f;
-
 										voxel.tsdfValue = tsdfValue;
+
+										if (1.0f < voxel.tsdfValue) voxel.tsdfValue = 1.0f;
+										if (-1.0f > voxel.tsdfValue) voxel.tsdfValue = -1.0f;
+
 										voxel.weight++;
 
 										voxel.color.x() = (voxel.color.x() + color.x()) / 2.0f;
@@ -604,7 +605,16 @@ namespace CUDA
 							// Interpolate along edge
 							int v0 = i & 7;
 							int v1 = (i + 1) & 7;
-							float alpha = tsdf[v0] / (tsdf[v0] - tsdf[v1]);
+							float alpha = 0.5f;
+							if (1e-6 < (tsdf[v0] - tsdf[v1]))
+							{
+								alpha = tsdf[v0] / (tsdf[v0] - tsdf[v1]);
+							}
+
+							if (alpha > 1.0f)
+							{
+								printf("Alpha : %f\n", alpha);
+							}
 
 							//if (std::isnan(tsdf[v0]) || std::isnan(tsdf[v1]) || tsdf[v0] == tsdf[v1]) {
 							//	continue; // Skip invalid or undefined interpolation
