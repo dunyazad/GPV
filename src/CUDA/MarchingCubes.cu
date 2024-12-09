@@ -547,9 +547,9 @@ namespace CUDA
 
 			{
 				// Triangles and vertices storage
-				thrust::device_vector<Eigen::Vector3f> vertices(volume.size() * 15); // Maximum triangles per voxel = 5 (15 vertices)
+				thrust::device_vector<Eigen::Vector3f> vertices(volume.size() * 12); // Maximum triangles per voxel = 5 (15 vertices)
 				auto d_vertices = thrust::raw_pointer_cast(vertices.data());
-				thrust::device_vector<uint3> triangles(volume.size() * 5);
+				thrust::device_vector<uint3> triangles(volume.size() * 4);
 				auto d_triangles = thrust::raw_pointer_cast(triangles.data());
 				thrust::device_vector<int> vertexCounter(1, 0);
 				thrust::device_vector<int> triangleCounter(1, 0);
@@ -560,15 +560,15 @@ namespace CUDA
 				thrust::for_each(thrust::counting_iterator<size_t>(0), thrust::counting_iterator<size_t>(volume.size()),
 					[=] __device__(size_t index) {
 
-					uint3 voxelIndex = make_uint3(
-						index % dimensions.x,
-						(index / dimensions.x) % dimensions.y,
-						index / (dimensions.x * dimensions.y));
+					unsigned int zKey = (unsigned int)index / (dimensions.x * dimensions.y);
+					unsigned int yKey = ((unsigned int)index % (dimensions.x * dimensions.y)) / dimensions.x;
+					unsigned int xKey = ((unsigned int)index % (dimensions.x * dimensions.y)) % dimensions.x;
 
+					uint3 voxelIndex = make_uint3(xKey, yKey, zKey);
 					Eigen::Vector3f voxelPos = volumeMin + Eigen::Vector3f(
-						voxelIndex.x * voxelSize,
-						voxelIndex.y * voxelSize,
-						voxelIndex.z * voxelSize);
+						(float)voxelIndex.x * voxelSize,
+						(float)voxelIndex.y * voxelSize,
+						(float)voxelIndex.z * voxelSize);
 
 					// Retrieve TSDF values at voxel corners
 					float tsdf[8];
@@ -598,38 +598,39 @@ namespace CUDA
 					int edges = edgeTable[cubeIndex];
 					if (edges == 0) return; // No triangles
 
-					// Compute vertex positions for intersected edges
+						const Eigen::Vector3f vertexOffsets[8] = {
+							{0.0f, 0.0f, 0.0f},  // Vertex 0
+							{1.0f, 0.0f, 0.0f},  // Vertex 1
+							{1.0f, 1.0f, 0.0f},  // Vertex 2
+							{0.0f, 1.0f, 0.0f},  // Vertex 3
+							{0.0f, 0.0f, 1.0f},  // Vertex 4
+							{1.0f, 0.0f, 1.0f},  // Vertex 5
+							{1.0f, 1.0f, 1.0f},  // Vertex 6
+							{0.0f, 1.0f, 1.0f}   // Vertex 7
+					};
+
 					Eigen::Vector3f edgeVertices[12];
 					for (int i = 0; i < 12; ++i) {
-						if (edges & (1 << i)) {
-							// Interpolate along edge
-							int v0 = i & 7;
-							int v1 = (i + 1) & 7;
+						if (edges & (1 << i)) { // 에지 i가 활성화된 경우
+							int i0 = edgeVertexMap[i][0];
+							int i1 = edgeVertexMap[i][1];
+
+							// 에지 끝점 좌표 가져오기
+							Eigen::Vector3f p0 = voxelPos + vertexOffsets[i0] * voxelSize;
+							Eigen::Vector3f p1 = voxelPos + vertexOffsets[i1] * voxelSize;
+
+							// 보간 계수(alpha) 계산
 							float alpha = 0.5f; // 기본값
-							float diff = tsdf[v0] - tsdf[v1];
+							float diff = tsdf[i0] - tsdf[i1];
 							if (fabs(diff) > 1e-6) { // 분모가 유효한 경우에만 계산
-								alpha = tsdf[v0] / diff;
+								alpha = tsdf[i0] / diff;
 							}
-							alpha = fminf(fmaxf(alpha, 0.0f), 1.0f); // alpha를 [0, 1] 범위로 클램핑
+							alpha = fminf(fmaxf(alpha, 0.0f), 1.0f); // [0, 1] 범위로 클램핑
 
-							if (alpha > 1.0f)
-							{
-								printf("Alpha : %f\n", alpha);
-							}
-
-							//if (std::isnan(tsdf[v0]) || std::isnan(tsdf[v1]) || tsdf[v0] == tsdf[v1]) {
-							//	continue; // Skip invalid or undefined interpolation
-							//}
-
-							//printf("alpha : %f\n", alpha);
-
-							edgeVertices[i] = voxelPos + Eigen::Vector3f(
-								alpha * ((v1 & 1) - (v0 & 1)) * voxelSize,
-								alpha * ((v1 & 2) - (v0 & 2)) * voxelSize,
-								alpha * ((v1 & 4) - (v0 & 4)) * voxelSize);
+							// 교차점 좌표 계산
+							edgeVertices[i] = p0 + alpha * (p1 - p0);
 						}
 					}
-
 
 					//printf("index : %llu\n", index);
 					//return;
