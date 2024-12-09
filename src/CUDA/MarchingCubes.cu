@@ -605,11 +605,12 @@ namespace CUDA
 							// Interpolate along edge
 							int v0 = i & 7;
 							int v1 = (i + 1) & 7;
-							float alpha = 0.5f;
-							if (1e-6 < (tsdf[v0] - tsdf[v1]))
-							{
-								alpha = tsdf[v0] / (tsdf[v0] - tsdf[v1]);
+							float alpha = 0.5f; // 기본값
+							float diff = tsdf[v0] - tsdf[v1];
+							if (fabs(diff) > 1e-6) { // 분모가 유효한 경우에만 계산
+								alpha = tsdf[v0] / diff;
 							}
+							alpha = fminf(fmaxf(alpha, 0.0f), 1.0f); // alpha를 [0, 1] 범위로 클램핑
 
 							if (alpha > 1.0f)
 							{
