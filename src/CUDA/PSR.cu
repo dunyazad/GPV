@@ -228,7 +228,7 @@ namespace CUDA
 			auto t = Time::Now();
 
 			stringstream ss;
-			ss << "D:\\Resources\\3D\\PLY\\Complete\\Lower_pointcloud.ply";
+			ss << "C:\\Resources\\3D\\PLY\\Complete\\Lower_pointcloud.ply";
 
 			PLYFormat ply;
 			ply.Deserialize(ss.str());
@@ -648,6 +648,12 @@ namespace CUDA
 							// Fetch the potential value
 							cornerValues[i] = d_potentials[flatIndex];
 
+							if (true == isnan(cornerValues[i]) ||
+								true == isinf(cornerValues[i]))
+							{
+								printf("cornerValues[%d] : %f\n", i, cornerValues[i]);
+							}
+
 							// Check if the potential value is below the isovalue
 							if (cornerValues[i] < isovalue) {
 								cubeIndex |= (1 << i); // Update cube index
@@ -671,12 +677,34 @@ namespace CUDA
 								Eigen::Vector3f p1 = GetPosition(gridCenter, dimensions, voxelSize, cornerIndices[v1]);
 								float val0 = cornerValues[v0];
 								float val1 = cornerValues[v1];
+
+								if (true == isnan(val0) ||
+									true == isinf(val0))
+								{
+									printf("val0 : %f, cornerValues[v0] : %f\n", val0, cornerValues[v0]);
+								}
+
 								float denom = val1 - val0;
-								float t = (denom != 0.0f) ? (isovalue - val0) / denom : 0.5f; // 보간 중간값 사용
+
+								if (fabsf(val0 - val1) < 0.000001f)
+								{
+									denom = 0.5f;
+								}
+
+								float t = (isovalue - val0) / denom;
 
 								vertList[i] = p0 + t * (p1 - p0);
 
-								//printf("%f, %f, %f\n", vertList[i].x(), vertList[i].y(), vertList[i].z());
+								//if (true == isnan(vertList[i].x()) ||
+								//	true == isnan(vertList[i].y()) ||
+								//	true == isnan(vertList[i].z()) ||
+								//	true == isinf(vertList[i].x()) ||
+								//	true == isinf(vertList[i].y()) ||
+								//	true == isinf(vertList[i].z()))
+								//{
+								//	//printf("%f, %f, %f\n", vertList[i].x(), vertList[i].y(), vertList[i].z());
+								//	printf("val0 : %f, val1 : %f, denom : %f, t : %f\n", val0, val1, denom, t);
+								//}
 							}
 						}
 
@@ -687,13 +715,13 @@ namespace CUDA
 
 							//printf("%d %d %d\n", t0, t1, t2);
 
-							printf("%f, %f, %f\n", vertList[t0], vertList[t1], vertList[t2]);
+							//printf("%f, %f, %f\n", vertList[t0], vertList[t1], vertList[t2]);
 
-							if (idx < triangles.size()) {
+	/*						if (idx < triangles.size()) {
 								d_triangles[idx].v0 = vertList[t0];
 								d_triangles[idx].v1 = vertList[t1];
 								d_triangles[idx].v2 = vertList[t2];
-							}
+							}*/
 						}
 					});
 

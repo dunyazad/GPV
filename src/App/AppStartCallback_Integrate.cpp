@@ -389,6 +389,8 @@ void AppStartCallback_Integrate(App* pApp)
 		cudaFree(resultPoints);
 		cudaFree(numberOfResultPoints);
 
+		cudaDeviceSynchronize();
+
 		t = Time::Now();
 		for (size_t i = 0; i < volumeDimensionX * volumeDimensionY * volumeDimensionZ; i++)
 		{
