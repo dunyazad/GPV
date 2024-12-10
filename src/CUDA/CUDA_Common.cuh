@@ -140,7 +140,9 @@ inline void checkCusparseStatus(cusparseStatus_t status, const char* func, const
 #define CHECK_CUSPARSE_ERROR(val) checkCusparseStatus((val), #val, __FILE__, __LINE__)
 
 
-
+#pragma region float3 math
+#ifndef __CUDA_FLOAT3_MATH__
+#define __CUDA_FLOAT3_MATH__
 __host__ __device__
 inline float3 operator+(const float3& a, const float3& b) {
     return make_float3(a.x + b.x, a.y + b.y, a.z + b.z);
@@ -227,6 +229,8 @@ inline float3 normalize(const float3& a) {
         return make_float3(0.0f, 0.0f, 0.0f);
     }
 }
+#endif
+#pragma endregion
 
 __device__ __constant__
 const int edgeTable[256] = {

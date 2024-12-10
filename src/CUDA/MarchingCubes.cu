@@ -85,7 +85,7 @@ namespace CUDA
 			Eigen::Vector3f normal;
 			Eigen::Vector3f color;
 			float weight;
-			__host__ __device__ Voxel() : minDistance(FLT_MAX), tsdfValue(1.0f), normal(0.0f, 0.0f, 0.0f), color(1.0f, 1.0f, 1.0f), weight(0.0f) {}
+			__host__ __device__ Voxel() : minDistance(FLT_MAX), tsdfValue(FLT_MAX), normal(0.0f, 0.0f, 0.0f), color(1.0f, 1.0f, 1.0f), weight(0.0f) {}
 		};
 
 		__host__ __device__
@@ -412,11 +412,12 @@ namespace CUDA
 			Eigen::Vector3f volumeMin(-5.0f, -5.0f, -5.0f);
 			Eigen::Vector3f volumeMax(5.0f, 5.0f, 5.0f);
 			Eigen::Vector3f diff = volumeMax - volumeMin;
-			Eigen::Vector3f center = (volumeMax + volumeMin) * 0.5f;
+			Eigen::Vector3f volumeCenter = (volumeMax + volumeMin) * 0.5f;
 			float voxelSize = 0.1f;
 			float truncationDistance = 0.5f;
 			float isoValue = 0.0f;
 			int voxelNeighborRange = (int)ceilf(truncationDistance / voxelSize);
+			//voxelNeighborRange = 1;
 
 			uint3 dimensions;
 			dimensions.x = (uint32_t)ceilf(diff.x() / voxelSize);
@@ -431,7 +432,7 @@ namespace CUDA
 			thrust::for_each(thrust::counting_iterator((size_t)0), thrust::counting_iterator(volume.size()),
 				[=] __device__(size_t index) {
 				d_volume[index].minDistance = FLT_MAX;
-				d_volume[index].tsdfValue = truncationDistance;
+				d_volume[index].tsdfValue = FLT_MAX;
 				d_volume[index].weight = 0;
 				d_volume[index].normal = Eigen::Vector3f(0.0f, 0.0f, 0.0f);
 				d_volume[index].color = Eigen::Vector3f(1.0f, 1.0f, 1.0f);
@@ -457,6 +458,67 @@ namespace CUDA
 
 				Time::End(t, "Loading PointCloud Patch", i);
 
+				//{
+				//	t = Time::Now();
+				//	nvtxRangePushA("Insert Points");
+
+				//	thrust::for_each(
+				//		thrust::make_zip_iterator(thrust::make_tuple(
+				//			patchBuffers.inputPoints.begin(),
+				//			patchBuffers.inputNormals.begin(),
+				//			patchBuffers.inputColors.begin())),
+				//		thrust::make_zip_iterator(thrust::make_tuple(
+				//			patchBuffers.inputPoints.end(),
+				//			patchBuffers.inputNormals.end(),
+				//			patchBuffers.inputColors.end())),
+				//		[=] __device__(thrust::tuple<Eigen::Vector3f, Eigen::Vector3f, Eigen::Vector3f> t) {
+				//		Eigen::Vector3f point = thrust::get<0>(t);
+				//		Eigen::Vector3f normal = thrust::get<1>(t);
+				//		Eigen::Vector3f color = thrust::get<2>(t);
+
+				//		for (int dx = -voxelNeighborRange; dx <= voxelNeighborRange; ++dx) {
+				//			for (int dy = -voxelNeighborRange; dy <= voxelNeighborRange; ++dy) {
+				//				for (int dz = -voxelNeighborRange; dz <= voxelNeighborRange; ++dz) {
+				//					Eigen::Vector3f offset(dx * voxelSize, dy * voxelSize, dz * voxelSize);
+				//					Eigen::Vector3f voxelCenter = point + offset;
+
+				//					uint3 index = GetIndex(center, dimensions, voxelSize, voxelCenter);
+				//					if (index.x == UINT_MAX || index.y == UINT_MAX || index.z == UINT_MAX) continue;
+
+				//					size_t flatIndex = GetFlatIndex(index, dimensions);
+
+				//					Voxel& voxel = d_volume[flatIndex];
+				//					float distance = (voxelCenter - point).norm();
+				//					atomicMinFloat(&voxel.minDistance, distance);
+
+				//					if (fabs(distance - voxel.minDistance) < 1e-6f) {
+				//						float tsdfValue = distance / truncationDistance;
+				//						tsdfValue = (voxelCenter - point).dot(normal) > 0 ? tsdfValue : -tsdfValue;
+
+				//						voxel.tsdfValue = tsdfValue;
+
+				//						//if (1.0f < voxel.tsdfValue) voxel.tsdfValue = 1.0f;
+				//						//if (-1.0f > voxel.tsdfValue) voxel.tsdfValue = -1.0f;
+
+				//						voxel.weight++;
+
+				//						voxel.color.x() = (voxel.color.x() + color.x()) / 2.0f;
+				//						voxel.color.y() = (voxel.color.y() + color.y()) / 2.0f;
+				//						voxel.color.z() = (voxel.color.z() + color.z()) / 2.0f;
+
+				//						voxel.normal.x() = (voxel.normal.x() + normal.x()) / 2.0f;
+				//						voxel.normal.y() = (voxel.normal.y() + normal.y()) / 2.0f;
+				//						voxel.normal.z() = (voxel.normal.z() + normal.z()) / 2.0f;
+				//					}
+				//				}
+				//			}
+				//		}
+				//	});
+
+				//	nvtxRangePop();
+				//	t = Time::End(t, "Insert Points");
+				//}
+
 				{
 					t = Time::Now();
 					nvtxRangePushA("Insert Points");
@@ -481,7 +543,7 @@ namespace CUDA
 									Eigen::Vector3f offset(dx * voxelSize, dy * voxelSize, dz * voxelSize);
 									Eigen::Vector3f voxelCenter = point + offset;
 
-									uint3 index = GetIndex(center, dimensions, voxelSize, voxelCenter);
+									uint3 index = GetIndex(volumeCenter, dimensions, voxelSize, voxelCenter);
 									if (index.x == UINT_MAX || index.y == UINT_MAX || index.z == UINT_MAX) continue;
 
 									size_t flatIndex = GetFlatIndex(index, dimensions);
@@ -496,8 +558,8 @@ namespace CUDA
 
 										voxel.tsdfValue = tsdfValue;
 
-										if (1.0f < voxel.tsdfValue) voxel.tsdfValue = 1.0f;
-										if (-1.0f > voxel.tsdfValue) voxel.tsdfValue = -1.0f;
+										//if (1.0f < voxel.tsdfValue) voxel.tsdfValue = 1.0f;
+										//if (-1.0f > voxel.tsdfValue) voxel.tsdfValue = -1.0f;
 
 										voxel.weight++;
 
@@ -546,8 +608,7 @@ namespace CUDA
 			//Time::End(t, "Show Voxels");
 
 			{
-				// Triangles and vertices storage
-				thrust::device_vector<Eigen::Vector3f> vertices(volume.size() * 12); // Maximum triangles per voxel = 5 (15 vertices)
+				thrust::device_vector<Eigen::Vector3f> vertices(volume.size() * 12);
 				auto d_vertices = thrust::raw_pointer_cast(vertices.data());
 				thrust::device_vector<uint3> triangles(volume.size() * 4);
 				auto d_triangles = thrust::raw_pointer_cast(triangles.data());
@@ -556,7 +617,6 @@ namespace CUDA
 				int* vertexCounterPtr = thrust::raw_pointer_cast(vertexCounter.data());
 				int* triangleCounterPtr = thrust::raw_pointer_cast(triangleCounter.data());
 
-				// Marching Cubes logic
 				thrust::for_each(thrust::counting_iterator<size_t>(0), thrust::counting_iterator<size_t>(volume.size()),
 					[=] __device__(size_t index) {
 
@@ -565,23 +625,28 @@ namespace CUDA
 					unsigned int xKey = ((unsigned int)index % (dimensions.x * dimensions.y)) % dimensions.x;
 
 					uint3 voxelIndex = make_uint3(xKey, yKey, zKey);
+					auto voxel = d_volume[GetFlatIndex(voxelIndex, dimensions)];
+					if (FLT_MAX == voxel.tsdfValue) return;
+					if (-truncationDistance > voxel.tsdfValue || voxel.tsdfValue > truncationDistance) return;
+
+					Eigen::Vector3f voxelNormal = voxel.normal;
+
 					Eigen::Vector3f voxelPos = volumeMin + Eigen::Vector3f(
 						(float)voxelIndex.x * voxelSize,
 						(float)voxelIndex.y * voxelSize,
 						(float)voxelIndex.z * voxelSize);
 
 					const Eigen::Vector3f vertexOffsets[8] = {
-						{0.0f, 0.0f, 0.0f},  // Vertex 0
-						{1.0f, 0.0f, 0.0f},  // Vertex 1
-						{1.0f, 0.0f, 1.0f},  // Vertex 2
-						{0.0f, 0.0f, 1.0f},  // Vertex 3
-						{0.0f, 1.0f, 0.0f},  // Vertex 4
-						{1.0f, 1.0f, 0.0f},  // Vertex 5
-						{1.0f, 1.0f, 1.0f},  // Vertex 6
-						{0.0f, 1.0f, 1.0f}   // Vertex 7
+						{0.0f, 0.0f, 0.0f},
+						{1.0f, 0.0f, 0.0f},
+						{1.0f, 0.0f, 1.0f},
+						{0.0f, 0.0f, 1.0f},
+						{0.0f, 1.0f, 0.0f},
+						{1.0f, 1.0f, 0.0f},
+						{1.0f, 1.0f, 1.0f},
+						{0.0f, 1.0f, 1.0f} 
 					};
 
-					// Retrieve TSDF values at voxel corners
 					float tsdf[8];
 					for (int i = 0; i < 8; ++i) {
 						uint3 cornerIndex = make_uint3(
@@ -594,112 +659,103 @@ namespace CUDA
 							tsdf[i] = d_volume[cornerFlatIndex].tsdfValue;
 						}
 						else {
-							tsdf[i] = truncationDistance; // Default value for out-of-bounds
+							tsdf[i] = FLT_MAX;
 						}
 					}
 
-					// Compute the cube index based on TSDF signs
 					int cubeIndex = 0;
 					for (int i = 0; i < 8; ++i) {
-						if (tsdf[i] < isoValue) cubeIndex |= (1 << i);
+						if (tsdf[i] != FLT_MAX &&
+							(-truncationDistance <= tsdf[i] || tsdf[i] <= truncationDistance) &&
+							tsdf[i] < isoValue)
+						{
+							cubeIndex |= (1 << i);
+						}
 					}
 
-					// Get edges intersected
 					int edges = edgeTable[cubeIndex];
-					if (edges == 0) return; // No triangles
+					if (edges == 0) return;
 
 					Eigen::Vector3f edgeVertices[12];
 					for (int i = 0; i < 12; ++i) {
-						if (edges & (1 << i)) { // 에지 i가 활성화된 경우
+						if (edges & (1 << i)) {
 							int i0 = edgeVertexMap[i][0];
 							int i1 = edgeVertexMap[i][1];
 
-							// 에지 끝점 좌표 가져오기
 							Eigen::Vector3f p0 = voxelPos + vertexOffsets[edgeVertexMap[i][0]] * voxelSize;
 							Eigen::Vector3f p1 = voxelPos + vertexOffsets[edgeVertexMap[i][1]] * voxelSize;
 
-							// 보간 계수(alpha) 계산
-							float alpha = 0.5f; // 기본값
+							float alpha = 0.5f;
 							float diff = tsdf[i0] - tsdf[i1];
-							if (fabs(diff) > 1e-6) { // 분모가 유효한 경우에만 계산
+							if (fabs(diff) > 1e-6) {
 								alpha = (isoValue - tsdf[i0]) / (tsdf[i1] - tsdf[i0]);
-								alpha = fminf(fmaxf(alpha, 0.0f), 1.0f); // [0, 1] 범위로 클램핑
+								//alpha = fminf(fmaxf(alpha, 0.0f), 1.0f);
 							}
 
-							// 교차점 좌표 계산
 							edgeVertices[i] = p0 + alpha * (p1 - p0);
 						}
 					}
 
-					//printf("index : %llu\n", index);
-					//return;
-
-
-					// Generate triangles
 					for (int i = 0; triTable[cubeIndex][i] != -1; i += 3) {
+						auto& v0 = edgeVertices[triTable[cubeIndex][i]];
+						auto& v1 = edgeVertices[triTable[cubeIndex][i + 1]];
+						auto& v2 = edgeVertices[triTable[cubeIndex][i + 2]];
+
 						int localVertexIndex = atomicAdd(vertexCounterPtr, 3);
 						int localTriangleIndex = atomicAdd(triangleCounterPtr, 1);
 
 						// Assign vertices and triangles
-						d_vertices[localVertexIndex] = edgeVertices[triTable[cubeIndex][i]];
-						d_vertices[localVertexIndex + 1] = edgeVertices[triTable[cubeIndex][i + 1]];
-						d_vertices[localVertexIndex + 2] = edgeVertices[triTable[cubeIndex][i + 2]];
+						d_vertices[localVertexIndex] = v0;
+						d_vertices[localVertexIndex + 1] = v1;
+						d_vertices[localVertexIndex + 2] = v2;
 
 						d_triangles[localTriangleIndex] = make_uint3(localVertexIndex, localVertexIndex + 1, localVertexIndex + 2);
 					}
 				});
 
-				{
-					thrust::host_vector<Voxel> h_volume(volume);
-					for (size_t i = 0; i < numberOfVoxels; i++)
-					{
-						Voxel& voxel = h_volume[i];
+				//{
+				//	thrust::host_vector<Voxel> h_volume(volume);
+				//	for (size_t i = 0; i < numberOfVoxels; i++)
+				//	{
+				//		Voxel& voxel = h_volume[i];
 
-						auto tsdfValue = h_volume[i].tsdfValue;
+				//		auto tsdfValue = h_volume[i].tsdfValue;
 
-						if (tsdfValue > 1.0f)
-						{
-							printf("tsdfValue : %f\n", tsdfValue);
+				//		//if (tsdfValue > 1.0f)
+				//		//{
+				//		//	//printf("tsdfValue : %f\n", tsdfValue);
 
-							int zKey = i / (dimensions.x * dimensions.y);
-							int yKey = (i % (dimensions.x * dimensions.y)) / dimensions.x;
-							int xKey = (i % (dimensions.x * dimensions.y)) % dimensions.x;
+				//		//	int zKey = i / (dimensions.x * dimensions.y);
+				//		//	int yKey = (i % (dimensions.x * dimensions.y)) / dimensions.x;
+				//		//	int xKey = (i % (dimensions.x * dimensions.y)) % dimensions.x;
 
-							float x = volumeMin.x() + (float)xKey * voxelSize;
-							float y = volumeMin.y() + (float)yKey * voxelSize;
-							float z = volumeMin.z() + (float)zKey * voxelSize;
+				//		//	float x = volumeMin.x() + (float)xKey * voxelSize;
+				//		//	float y = volumeMin.y() + (float)yKey * voxelSize;
+				//		//	float z = volumeMin.z() + (float)zKey * voxelSize;
 
-							VD::AddCube("temp", { x, y, z }, voxelSize, Color4::Red);
-							continue;
-						}
+				//		//	VD::AddCube("temp", { x, y, z }, voxelSize, Color4::Red);
+				//		//	continue;
+				//		//}
 
-						if (-0.05f < tsdfValue && tsdfValue < 0.05f)
-							//if(0 < h_volume[i].weight)
-						{
-							// TSDF 값 정규화
-							//voxel.tsdfValue /= voxel.weight;
+				//		if (-0.05f < tsdfValue && tsdfValue < 0.05f)
+				//		{
+				//			if (fabs(voxel.tsdfValue) < truncationDistance) {
+				//				int zKey = i / (dimensions.x * dimensions.y);
+				//				int yKey = (i % (dimensions.x * dimensions.y)) / dimensions.x;
+				//				int xKey = (i % (dimensions.x * dimensions.y)) % dimensions.x;
 
-							// 색상 값 정규화
-							//voxel.color /= voxel.weight;
+				//				float x = volumeMin.x() + (float)xKey * voxelSize;
+				//				float y = volumeMin.y() + (float)yKey * voxelSize;
+				//				float z = volumeMin.z() + (float)zKey * voxelSize;
 
-							// 시각화
-							if (fabs(voxel.tsdfValue) < truncationDistance) {
-								int zKey = i / (dimensions.x * dimensions.y);
-								int yKey = (i % (dimensions.x * dimensions.y)) / dimensions.x;
-								int xKey = (i % (dimensions.x * dimensions.y)) % dimensions.x;
-
-								float x = volumeMin.x() + (float)xKey * voxelSize;
-								float y = volumeMin.y() + (float)yKey * voxelSize;
-								float z = volumeMin.z() + (float)zKey * voxelSize;
-
-								Color4 color = Color4::FromNormalized(voxel.color.x(), voxel.color.y(), voxel.color.z(), 1.0f);
-								//VD::AddCube("temp", { x, y, z }, { voxelSize, voxelSize, voxelSize }, voxel.normal, color);
-								VD::AddCube("temp", { x, y, z }, voxelSize * 0.25, color);
-							}
-						}
-					}
-					Time::End(t, "Show Voxels");
-				}
+				//				Color4 color = Color4::FromNormalized(voxel.color.x(), voxel.color.y(), voxel.color.z(), 1.0f);
+				//				//VD::AddCube("temp", { x, y, z }, { voxelSize, voxelSize, voxelSize }, voxel.normal, color);
+				//				VD::AddCube("temp", { x, y, z }, voxelSize * 0.25, color);
+				//			}
+				//		}
+				//	}
+				//	Time::End(t, "Show Voxels");
+				//}
 
 				{
 					// Resize vectors to fit actual counts
@@ -716,7 +772,7 @@ namespace CUDA
 						auto& i1 = t.y;
 						auto& i2 = t.z;
 
-						//printf("%d, %d, %d\n", i0, i1, i2);
+						printf("%d, %d, %d\n", i0, i1, i2);
 
 						auto& v0 = h_vertices[i0];
 						auto& v1 = h_vertices[i1];
@@ -735,7 +791,7 @@ namespace CUDA
 						if (volumeMin.z() > v2.z() || v2.z() > volumeMax.z()) continue;
 
 
-						//printf("%f, %f, %f\n", v0.x(), v0.y(), v0.z());
+						printf("%f, %f, %f\n", v0.x(), v0.y(), v0.z());
 
 						VD::AddTriangle("Mesh", v0, v1, v2, Color4::White);
 					}

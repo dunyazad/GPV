@@ -570,7 +570,7 @@ namespace CUDA
 								// 발산 값이 유효한지 확인하는 조건 강화
 								if (!isnan(divergence) && divergence != FLT_MAX)
 								{
-									if (fabsf(divergence) > 0.05f)  // 발산 값이 일정 범위 내에 있는 경우에만 화살표 추가
+									if (fabsf(divergence) > 0.95f)  // 발산 값이 일정 범위 내에 있는 경우에만 화살표 추가
 									{
 										Eigen::Vector3f position = GetPosition(center, dimensions, voxelSize, index);
 										VD::AddArrow("Divergences", position, voxel.normal, voxelSize, Color4::Red);
@@ -609,14 +609,14 @@ namespace CUDA
 
 						// 8개 코너의 3D 인덱스 계산
 						uint3 cornerIndices[8] = {
-							make_uint3(x, y, z),
-							make_uint3(x + 1, y, z),
+							make_uint3(x,     y,     z),
+							make_uint3(x + 1, y,     z),
+							make_uint3(x + 1, y    , z + 1),
+							make_uint3(x,     y    , z + 1),
+							make_uint3(x,     y + 1, z),
 							make_uint3(x + 1, y + 1, z),
-							make_uint3(x, y + 1, z),
-							make_uint3(x, y, z + 1),
-							make_uint3(x + 1, y, z + 1),
 							make_uint3(x + 1, y + 1, z + 1),
-							make_uint3(x, y + 1, z + 1)
+							make_uint3(x,     y + 1, z + 1)
 						};
 
 						// 상태 값 계산

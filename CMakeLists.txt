@@ -42,6 +42,9 @@ ${HDIAPI_LIBRARIES}
 ENDIF()
 
 set(cuda_source_list
+    src/CUDA/CUDA_Test.cuh
+    src/CUDA/CUDA_Test.cu
+
     src/CUDA/CUDA_Common.cuh
     src/CUDA/CUDA.cuh
     src/CUDA/CUDA.cu
@@ -98,6 +101,7 @@ set(source_list
     src/Algorithm/HVETM.cpp
     src/Algorithm/KDtree.h
     src/Algorithm/KDTree.cpp
+    src/Algorithm/MarchingCubes.hpp
     src/Algorithm/Octree.hpp
     src/Algorithm/CustomPolyDataFilter.h
     src/Algorithm/CustomPolyDataFilter.cpp
