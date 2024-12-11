@@ -391,7 +391,7 @@ bool AppStartCallback(App* pApp)
 	//AppStartCallback_RegularGrid(pApp);
 	//AppStartCallback_SVO(pApp);
 	//AppStartCallback_HashMap(pApp);
-	AppStartCallback_PSR(pApp);
-	//AppStartCallback_MarchingCubes(pApp);
+	//AppStartCallback_PSR(pApp);
+	AppStartCallback_MarchingCubes(pApp);
 	return true;
 }

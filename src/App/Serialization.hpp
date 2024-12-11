@@ -351,7 +351,7 @@ public:
 		{
 			indexCount = colors.size() / 3;
 		}
-		fprintf(fp, "%d %d %d\n", pointCount, indexCount, 0);
+		fprintf(fp, "%llu %llu %llu\n", pointCount, indexCount, 0);
 
 		for (size_t i = 0; i < points.size() / 3; i++)
 		{
