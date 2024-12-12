@@ -145,7 +145,7 @@ namespace MarchingCubes
 			{0.0f, 1.0f, 0.0f},
 			{1.0f, 1.0f, 0.0f},
 			{1.0f, 1.0f, 1.0f},
-			{0.0f, 1.0f, 1.0f} };
+			{0.0f, 1.0f, 1.0f}};
 
 	__device__ __constant__
 		const int edgeTable[256] = {
@@ -473,16 +473,10 @@ namespace MarchingCubes
 
 #ifdef USE_CUDA
 	template<typename T>
-	__global__ void Kernel_ExtractVertices(typename MarchingCubesSurfaceExtractor<T>::Internal* internal);
-
-	template<typename T>
-	__global__ void Kernel_ExtractTriangles(typename MarchingCubesSurfaceExtractor<T>::Internal* internal);
+	__global__ void Kernel_Extract(typename MarchingCubesSurfaceExtractor<T>::Internal* internal);
 #else
 	template<typename T>
-	void Kernel_ExtractVertices(size_t index, typename MarchingCubesSurfaceExtractor<T>::Internal* internal);
-
-	template<typename T>
-	void Kernel_ExtractTriangles(size_t index, typename MarchingCubesSurfaceExtractor<T>::Internal* internal);
+	void Kernel_Extract(size_t index, typename MarchingCubesSurfaceExtractor<T>::Internal* internal);
 #endif
 
 	template<typename T>
@@ -501,13 +495,8 @@ namespace MarchingCubes
 			printf("h_internal->numberOfVoxels : %llu\n", h_internal->numberOfVoxels);
 
 #ifdef USE_CUDA
-			cudaMalloc(&h_internal->vertices, sizeof(float3) * h_internal->numberOfVoxels * 3);
-			cudaMalloc(&h_internal->vertexMapping, sizeof(unsigned int) * h_internal->numberOfVoxels * 3);
+			cudaMalloc(&h_internal->vertices, sizeof(float3) * h_internal->numberOfVoxels * 12);
 			cudaMalloc(&h_internal->triangles, sizeof(uint3) * h_internal->numberOfVoxels * 4);
-
-			cudaMemset(h_internal->vertices, 0, sizeof(float3) * h_internal->numberOfVoxels * 3);
-			cudaMemset(h_internal->vertexMapping, 0, sizeof(unsigned int) * h_internal->numberOfVoxels * 3);
-			cudaMemset(h_internal->triangles, 0, sizeof(uint3) * h_internal->numberOfVoxels * 4);
 
 			cudaMalloc(&h_internal->vertexCounterPtr, sizeof(unsigned int));
 			cudaMalloc(&h_internal->triangleCounterPtr, sizeof(unsigned int));
@@ -520,8 +509,7 @@ namespace MarchingCubes
 			h_internal->vertexCounterPtr = new unsigned int;
 			h_internal->triangleCounterPtr = new unsigned int;
 
-			h_internal->vertices = new float3[h_internal->numberOfVoxels * 3];
-			h_internal->vertexMapping = new unsigned int[h_internal->numberOfVoxels * 3];
+			h_internal->vertices = new float3[h_internal->numberOfVoxels * 12];
 			h_internal->triangles = new uint3[h_internal->numberOfVoxels * 4];
 #endif
 		}
@@ -533,7 +521,6 @@ namespace MarchingCubes
 			cudaFree(h_internal->triangleCounterPtr);
 
 			cudaFree(h_internal->vertices);
-			cudaFree(h_internal->vertexMapping);
 			cudaFree(h_internal->triangles);
 
 			cudaFree(d_internal);
@@ -542,7 +529,6 @@ namespace MarchingCubes
 			delete h_internal->triangleCounterPtr;
 
 			delete[] h_internal->vertices;
-			delete[] h_internal->vertexMapping;
 			delete[] h_internal->triangles;
 #endif
 			delete[] h_internal;
@@ -560,10 +546,10 @@ namespace MarchingCubes
 
 			printf("grid size : %d, %d, %d\n", gridSize.x, gridSize.y, gridSize.z);
 
-			Kernel_ExtractVertices<T> << <gridSize, blockSize >> > (d_internal);
+			// Correct kernel launch syntax
+			Kernel_Extract<T><<<gridSize, blockSize>>>(d_internal);
 
-			Kernel_ExtractTriangles<T> << <gridSize, blockSize >> > (d_internal);
-
+			// Synchronize CUDA device to ensure all operations complete
 			cudaDeviceSynchronize();
 
 			cudaError_t err = cudaGetLastError();
@@ -578,16 +564,8 @@ namespace MarchingCubes
 #else
 			for (size_t i = 0; i < h_internal->numberOfVoxels; i++)
 			{
-				Kernel_ExtractVertices<T>(i, h_internal);
+				Kernel_Extract<T>(i, h_internal);
 			}
-
-			for (size_t i = 0; i < h_internal->numberOfVoxels; i++)
-			{
-				Kernel_ExtractTriangles<T>(i, h_internal);
-			}
-
-			unsigned int h_vertexCount;
-			unsigned int h_triangleCount;
 #endif
 
 			float3* vertices = new float3[h_vertexCount];
@@ -616,7 +594,6 @@ namespace MarchingCubes
 			size_t numberOfVoxels = (dimensions.x * dimensions.y * dimensions.z);
 			float isoValue = 0.0f;
 			float3* vertices = nullptr;
-			unsigned int* vertexMapping = nullptr;
 			uint3* triangles = nullptr;
 			unsigned int* vertexCounterPtr = nullptr;
 			unsigned int* triangleCounterPtr = nullptr;
@@ -658,10 +635,10 @@ namespace MarchingCubes
 
 #ifdef USE_CUDA
 	template<typename T>
-	__global__ void Kernel_ExtractVertices(typename MarchingCubesSurfaceExtractor<T>::Internal* internal)
+	__global__ void Kernel_Extract(typename MarchingCubesSurfaceExtractor<T>::Internal* internal)
 #else
 	template<typename T>
-	void Kernel_ExtractVertices(size_t index, typename MarchingCubesSurfaceExtractor<T>::Internal* internal)
+	void Kernel_Extract(size_t index, typename MarchingCubesSurfaceExtractor<T>::Internal* internal)
 #endif
 	{
 #ifdef USE_CUDA
@@ -683,124 +660,7 @@ namespace MarchingCubes
 
 		if (index >= internal->numberOfVoxels) return;
 
-		float3 voxelPosition = internal->volumeMin + make_float3(
-			(float)indexX * internal->voxelSize,
-			(float)indexY * internal->voxelSize,
-			(float)indexZ * internal->voxelSize);
-
-		float tsdf[8];
-		for (int i = 0; i < 8; ++i) {
-			uint3 cornerIndex = make_uint3(
-				indexX + (vertexOffsets[i].x > 0.0f ? 1 : 0),
-				indexY + (vertexOffsets[i].y > 0.0f ? 1 : 0),
-				indexZ + (vertexOffsets[i].z > 0.0f ? 1 : 0));
-			size_t cornerFlatIndex = GetFlatIndex(cornerIndex, internal->dimensions);
-
-			if (UINT_MAX == cornerFlatIndex)
-			{
-				//printf("%d, %d, %d\n", cornerIndex.x, cornerIndex.y, cornerIndex.z);
-				tsdf[i] = FLT_MAX;
-				continue;
-			}
-
-			if (cornerFlatIndex < internal->numberOfVoxels) {
-				tsdf[i] = internal->data[cornerFlatIndex];
-			}
-			else {
-				tsdf[i] = FLT_MAX;
-			}
-		}
-
-		if (FLT_MAX != tsdf[0] && FLT_MAX != tsdf[1])
-		{
-			float alpha = 0.5f;
-			float diff = tsdf[0] - tsdf[1];
-			if (fabs(diff) > 1e-6) {
-				alpha = (internal->isoValue - tsdf[0]) / (tsdf[1] - tsdf[0]);
-			}
-
-			if (0 <= alpha && alpha <= 1.0f)
-			{
-#ifdef USE_CUDA
-				int vertexIndex = atomicAdd(internal->vertexCounterPtr, 1);
-#else
-				int vertexIndex = (*internal->vertexCounterPtr);
-				(*internal->vertexCounterPtr) += 1;
-#endif
-				internal->vertexMapping[index * 3] = vertexIndex;
-				internal->vertices[vertexIndex] = voxelPosition + alpha * make_float3(internal->voxelSize, 0.0f, 0.0f);
-			}
-		}
-
-		if (FLT_MAX != tsdf[0] && FLT_MAX != tsdf[4])
-		{
-			float alpha = 0.5f;
-			float diff = tsdf[0] - tsdf[4];
-			if (fabs(diff) > 1e-6) {
-				alpha = (internal->isoValue - tsdf[0]) / (tsdf[4] - tsdf[0]);
-			}
-
-			if (0 <= alpha && alpha <= 1.0f)
-			{
-#ifdef USE_CUDA
-				int vertexIndex = atomicAdd(internal->vertexCounterPtr, 1);
-#else
-				int vertexIndex = (*internal->vertexCounterPtr);
-				(*internal->vertexCounterPtr) += 1;
-#endif
-				internal->vertexMapping[index * 3 + 1] = vertexIndex;
-				internal->vertices[vertexIndex] = voxelPosition + alpha * make_float3(0.0f, internal->voxelSize, 0.0f);
-			}
-		}
-
-		if (FLT_MAX != tsdf[0] && FLT_MAX != tsdf[3])
-		{
-			float alpha = 0.5f;
-			float diff = tsdf[0] - tsdf[3];
-			if (fabs(diff) > 1e-6) {
-				alpha = (internal->isoValue - tsdf[0]) / (tsdf[3] - tsdf[0]);
-			}
-
-			if (0 <= alpha && alpha <= 1.0f)
-			{
-#ifdef USE_CUDA
-				int vertexIndex = atomicAdd(internal->vertexCounterPtr, 1);
-#else
-				int vertexIndex = (*internal->vertexCounterPtr);
-				(*internal->vertexCounterPtr) += 1;
-#endif
-				internal->vertexMapping[index * 3 + 2] = vertexIndex;
-				internal->vertices[vertexIndex] = voxelPosition + alpha * make_float3(0.0f, 0.0f, internal->voxelSize);
-			}
-		}
-	}
-
-#ifdef USE_CUDA
-	template<typename T>
-	__global__ void Kernel_ExtractTriangles(typename MarchingCubesSurfaceExtractor<T>::Internal* internal)
-#else
-	template<typename T>
-	void Kernel_ExtractTriangles(size_t index, typename MarchingCubesSurfaceExtractor<T>::Internal* internal)
-#endif
-	{
-#ifdef USE_CUDA
-		size_t indexX = blockIdx.x * blockDim.x + threadIdx.x;
-		size_t indexY = blockIdx.y * blockDim.y + threadIdx.y;
-		size_t indexZ = blockIdx.z * blockDim.z + threadIdx.z;
-
-		if (indexX >= internal->dimensions.x ||
-			indexY >= internal->dimensions.y ||
-			indexZ >= internal->dimensions.z) return;
-
-		size_t index = indexZ * (internal->dimensions.x * internal->dimensions.y) +
-			indexY * internal->dimensions.x + indexX;
-#else
-		size_t indexZ = index / (internal->dimensions.x * internal->dimensions.y);
-		size_t indexY = (index / (internal->dimensions.x * internal->dimensions.y)) % internal->dimensions.x;
-		size_t indexX = (index / (internal->dimensions.x * internal->dimensions.y)) / internal->dimensions.x;
-#endif
-
-		if (index >= internal->numberOfVoxels) return;
+		//T& t = internal->data[index];
 
 		float3 voxelPosition = internal->volumeMin + make_float3(
 			(float)indexX * internal->voxelSize,
@@ -840,35 +700,51 @@ namespace MarchingCubes
 			}
 		}
 
-		int edge = edgeTable[cubeIndex];
-		if (edge == 0) return;
+		int edges = edgeTable[cubeIndex];
+		if (edges == 0) return;
 
-		size_t edgeVertexIndexMapping[12];
-		if (edge & 1) edgeVertexIndexMapping[0] = internal->vertexMapping[GetFlatIndex(make_uint3(indexX + 0, indexY + 0, indexZ + 0), internal->dimensions) * 3 + 0];
-		if (edge & 2) edgeVertexIndexMapping[1] = internal->vertexMapping[GetFlatIndex(make_uint3(indexX + 1, indexY + 0, indexZ + 0), internal->dimensions) * 3 + 2];
-		if (edge & 4) edgeVertexIndexMapping[2] = internal->vertexMapping[GetFlatIndex(make_uint3(indexX + 0, indexY + 0, indexZ + 1), internal->dimensions) * 3 + 0];
-		if (edge & 8) edgeVertexIndexMapping[3] = internal->vertexMapping[GetFlatIndex(make_uint3(indexX + 0, indexY + 0, indexZ + 0), internal->dimensions) * 3 + 2];
-		if (edge & 16) edgeVertexIndexMapping[4] = internal->vertexMapping[GetFlatIndex(make_uint3(indexX + 0, indexY + 1, indexZ + 0), internal->dimensions) * 3 + 0];
-		if (edge & 32) edgeVertexIndexMapping[5] = internal->vertexMapping[GetFlatIndex(make_uint3(indexX + 1, indexY + 1, indexZ + 0), internal->dimensions) * 3 + 2];
-		if (edge & 64) edgeVertexIndexMapping[6] = internal->vertexMapping[GetFlatIndex(make_uint3(indexX + 0, indexY + 1, indexZ + 1), internal->dimensions) * 3 + 0];
-		if (edge & 128) edgeVertexIndexMapping[7] = internal->vertexMapping[GetFlatIndex(make_uint3(indexX + 0, indexY + 1, indexZ + 0), internal->dimensions) * 3 + 2];
-		if (edge & 256) edgeVertexIndexMapping[8] = internal->vertexMapping[GetFlatIndex(make_uint3(indexX + 0, indexY + 0, indexZ + 0), internal->dimensions) * 3 + 1];
-		if (edge & 512) edgeVertexIndexMapping[9] = internal->vertexMapping[GetFlatIndex(make_uint3(indexX + 1, indexY + 0, indexZ + 0), internal->dimensions) * 3 + 1];
-		if (edge & 1024) edgeVertexIndexMapping[10] = internal->vertexMapping[GetFlatIndex(make_uint3(indexX + 1, indexY + 0, indexZ + 1), internal->dimensions) * 3 + 1];
-		if (edge & 2048) edgeVertexIndexMapping[11] = internal->vertexMapping[GetFlatIndex(make_uint3(indexX + 0, indexY + 0, indexZ + 1), internal->dimensions) * 3 + 1];
+		float3 edgeVertices[12];
+		for (int i = 0; i < 12; ++i) {
+			if (edges & (1 << i)) {
+				int i0 = edgeVertexMap[i][0];
+				int i1 = edgeVertexMap[i][1];
+
+				float3 p0 = voxelPosition + vertexOffsets[edgeVertexMap[i][0]] * internal->voxelSize;
+				float3 p1 = voxelPosition + vertexOffsets[edgeVertexMap[i][1]] * internal->voxelSize;
+
+				float alpha = 0.5f;
+				float diff = tsdf[i0] - tsdf[i1];
+				if (fabs(diff) > 1e-6) {
+					alpha = (internal->isoValue - tsdf[i0]) / (tsdf[i1] - tsdf[i0]);
+					//alpha = fminf(fmaxf(alpha, 0.0f), 1.0f);
+				}
+
+				edgeVertices[i] = p0 + alpha * (p1 - p0);
+			}
+		}
 
 		for (int i = 0; triTable[cubeIndex][i] != -1; i += 3) {
-			auto i0 = edgeVertexIndexMapping[triTable[cubeIndex][i]];
-			auto i1 = edgeVertexIndexMapping[triTable[cubeIndex][i + 1]];
-			auto i2 = edgeVertexIndexMapping[triTable[cubeIndex][i + 2]];
+			auto& v0 = edgeVertices[triTable[cubeIndex][i]];
+			auto& v1 = edgeVertices[triTable[cubeIndex][i + 1]];
+			auto& v2 = edgeVertices[triTable[cubeIndex][i + 2]];
 
 #ifdef USE_CUDA
-			int triangleIndex = atomicAdd(internal->triangleCounterPtr, 1);
+			int localVertexIndex = atomicAdd(internal->vertexCounterPtr, 3);
+			int localTriangleIndex = atomicAdd(internal->triangleCounterPtr, 1);
 #else
-			int triangleIndex = (*internal->triangleCounterPtr);
+			int localVertexIndex = (*internal->vertexCounterPtr);
+			(*internal->vertexCounterPtr) += 3;
+
+			int localTriangleIndex = (*internal->triangleCounterPtr);
 			(*internal->triangleCounterPtr) += 1;
 #endif
-			internal->triangles[triangleIndex] = make_uint3(i0, i1, i2);
+
+			// Assign vertices and triangles
+			internal->vertices[localVertexIndex] = v0;
+			internal->vertices[localVertexIndex + 1] = v1;
+			internal->vertices[localVertexIndex + 2] = v2;
+
+			internal->triangles[localTriangleIndex] = make_uint3(localVertexIndex, localVertexIndex + 1, localVertexIndex + 2);
 		}
 	}
 }

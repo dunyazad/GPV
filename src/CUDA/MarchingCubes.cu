@@ -859,9 +859,9 @@ namespace CUDA
 				make_float3(5.0f, 5.0f, 5.0f),
 				0.1f,
 				2.5f);
-
+			
 			auto result = mc.Extract();
-
+			
 			PLYFormat ply;
 
 			for (size_t i = 0; i < result.numberOfVertices; i++)
@@ -872,16 +872,13 @@ namespace CUDA
 
 			for (size_t i = 0; i < result.numberOfTriangles; i++)
 			{
-				auto i0 = result.triangles[i].x;
-				auto i1 = result.triangles[i].y;
-				auto i2 = result.triangles[i].z;
-
-				ply.AddIndex(i0);
-				ply.AddIndex(i1);
-				ply.AddIndex(i2);
+				auto t = result.triangles[i];
+				ply.AddIndex(t.x);
+				ply.AddIndex(t.y);
+				ply.AddIndex(t.z);
 			}
-
-			ply.Serialize("C:\\Resources\\Debug\\MC.ply");
+ 
+			ply.Serialize("C:\\Resources\\Debug\\TestSphere.ply");
 
 			for (size_t i = 0; i < result.numberOfTriangles; i++)
 			{
