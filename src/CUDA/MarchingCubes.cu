@@ -11,6 +11,7 @@ using VD = VisualDebugging;
 
 #include <App/AppStartCallback.h>
 
+#define USE_CUDA
 #include <Algorithm/MarchingCubes.hpp>
 
 namespace CUDA
@@ -865,13 +866,8 @@ namespace CUDA
 
 			for (size_t i = 0; i < result.numberOfVertices; i++)
 			{
-				auto v0 = result.vertices[i];
-				auto v1 = result.vertices[i];
-				auto v2 = result.vertices[i];
-
-				ply.AddPoint(v0.x, v0.y, v0.z);
-				ply.AddPoint(v1.x, v1.y, v1.z);
-				ply.AddPoint(v2.x, v2.y, v2.z);
+				auto v = result.vertices[i];
+				ply.AddPoint(v.x, v.y, v.z);
 			}
 
 			for (size_t i = 0; i < result.numberOfTriangles; i++)
@@ -899,6 +895,9 @@ namespace CUDA
 
 				VD::AddTriangle("Marching Cubes", { v0.x, v0.y, v0.z }, { v1.x, v1.y, v1.z }, { v2.x, v2.y, v2.z }, Color4::White);
 			}
+
+			delete result.vertices;
+			delete result.triangles;
 		}
 
 		void TestMarchingCubes()

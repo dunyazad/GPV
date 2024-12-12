@@ -1,6 +1,6 @@
 #pragma once
 
-#define USE_CUDA
+//#define USE_CUDA
 
 #include <stdio.h>
 #include <math.h>
