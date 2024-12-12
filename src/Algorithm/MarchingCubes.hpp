@@ -862,6 +862,9 @@ namespace MarchingCubes
 			auto i1 = edgeVertexIndexMapping[triTable[cubeIndex][i + 1]];
 			auto i2 = edgeVertexIndexMapping[triTable[cubeIndex][i + 2]];
 
+			if (0 == i0 || 0 == i1 || 0 == i2)
+				continue;
+
 #ifdef USE_CUDA
 			int triangleIndex = atomicAdd(internal->triangleCounterPtr, 1);
 #else
