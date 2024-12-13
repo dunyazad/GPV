@@ -926,16 +926,18 @@ namespace CUDA
 									float distance = (voxelPosition - point).norm();
 									atomicMinFloat(&voxel.minDistance, distance);
 
-									if (fabs(distance - voxel.minDistance) < 1e-6f) {
-										float tsdfValue = distance / truncationDistance;
+									//if (fabs(distance - voxel.minDistance) < 1e-6f) {
+									//if (distance <= voxel.minDistance) {
+										float tsdfValue = distance;// / truncationDistance;
 										tsdfValue = (voxelPosition - point).dot(normal) > 0 ? tsdfValue : -tsdfValue;
 
-										voxel.tsdfValue = tsdfValue;
+										float fused = (voxel.weight * voxel.tsdfValue + tsdfValue) / (voxel.weight + 1.0f);
+										voxel.tsdfValue = fused;
 
-										//if (1.0f < voxel.tsdfValue) voxel.tsdfValue = 1.0f;
-										//if (-1.0f > voxel.tsdfValue) voxel.tsdfValue = -1.0f;
+										if (1.0f < voxel.tsdfValue) voxel.tsdfValue = 1.0f;
+										if (-1.0f > voxel.tsdfValue) voxel.tsdfValue = -1.0f;
 
-										voxel.weight++;
+										voxel.weight = voxel.weight + 1.0f;
 
 										voxel.color.x() = (voxel.color.x() + color.x()) / 2.0f;
 										voxel.color.y() = (voxel.color.y() + color.y()) / 2.0f;
@@ -944,7 +946,7 @@ namespace CUDA
 										voxel.normal.x() = (voxel.normal.x() + normal.x()) / 2.0f;
 										voxel.normal.y() = (voxel.normal.y() + normal.y()) / 2.0f;
 										voxel.normal.z() = (voxel.normal.z() + normal.z()) / 2.0f;
-									}
+									//}
 								}
 							}
 						}
