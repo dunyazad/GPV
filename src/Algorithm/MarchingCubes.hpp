@@ -7,17 +7,7 @@
 #include <iostream>
 #include <tuple>
 
-#ifndef USE_CUDA
-#if !defined(__device__)
-#define __device__
-#endif
-#if !defined(__host__)
-#define __host__
-#if !defined(__global__)
-#define __global__
-#endif
-#endif
-#else
+#ifdef USE_CUDA
 #include <cuda_runtime.h>
 #include <vector_types.h>
 #include <nvtx3/nvToolsExt.h>
@@ -552,6 +542,7 @@ namespace MarchingCubes
 		MarchingCubesResult Extract()
 		{
 #ifdef USE_CUDA
+			nvtxRangePushA("Extract()");
 			dim3 blockSize(8, 8, 8);
 			dim3 gridSize(
 				(h_internal->dimensions.x + blockSize.x - 1) / blockSize.x,
@@ -560,11 +551,20 @@ namespace MarchingCubes
 
 			printf("grid size : %d, %d, %d\n", gridSize.x, gridSize.y, gridSize.z);
 
+			nvtxRangePushA("Kernel_ExtractVertices()");
+
 			Kernel_ExtractVertices<T> << <gridSize, blockSize >> > (d_internal);
+
+			cudaDeviceSynchronize();
+
+			nvtxRangePop();
+
+			nvtxRangePushA("Kernel_ExtractTriangles()");
 
 			Kernel_ExtractTriangles<T> << <gridSize, blockSize >> > (d_internal);
 
 			cudaDeviceSynchronize();
+			nvtxRangePop();
 
 			cudaError_t err = cudaGetLastError();
 			if (err != cudaSuccess) {
@@ -598,6 +598,9 @@ namespace MarchingCubes
 
 			printf("Extracted %d triangle, %d vertices\n", h_triangleCount, h_vertexCount);
 
+#ifdef USE_CUDA
+			nvtxRangePop();
+#endif
 			//return make_tuple(vertices, h_vertexCount, triangles, h_triangleCount);
 			return { vertices, h_vertexCount, triangles, h_triangleCount };
 		}

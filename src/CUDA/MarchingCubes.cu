@@ -233,7 +233,6 @@ namespace CUDA
 			cusolverSpDestroy(cusolverHandle);
 		}
 
-
 		void CheckCusolverStatus(cusolverStatus_t status, const char* msg)
 		{
 			if (status != CUSOLVER_STATUS_SUCCESS) {
@@ -460,67 +459,6 @@ namespace CUDA
 				patchBuffers.FromPLYFile(ply);
 
 				Time::End(t, "Loading PointCloud Patch", i);
-
-				//{
-				//	t = Time::Now();
-				//	nvtxRangePushA("Insert Points");
-
-				//	thrust::for_each(
-				//		thrust::make_zip_iterator(thrust::make_tuple(
-				//			patchBuffers.inputPoints.begin(),
-				//			patchBuffers.inputNormals.begin(),
-				//			patchBuffers.inputColors.begin())),
-				//		thrust::make_zip_iterator(thrust::make_tuple(
-				//			patchBuffers.inputPoints.end(),
-				//			patchBuffers.inputNormals.end(),
-				//			patchBuffers.inputColors.end())),
-				//		[=] __device__(thrust::tuple<Eigen::Vector3f, Eigen::Vector3f, Eigen::Vector3f> t) {
-				//		Eigen::Vector3f point = thrust::get<0>(t);
-				//		Eigen::Vector3f normal = thrust::get<1>(t);
-				//		Eigen::Vector3f color = thrust::get<2>(t);
-
-				//		for (int dx = -voxelNeighborRange; dx <= voxelNeighborRange; ++dx) {
-				//			for (int dy = -voxelNeighborRange; dy <= voxelNeighborRange; ++dy) {
-				//				for (int dz = -voxelNeighborRange; dz <= voxelNeighborRange; ++dz) {
-				//					Eigen::Vector3f offset(dx * voxelSize, dy * voxelSize, dz * voxelSize);
-				//					Eigen::Vector3f voxelCenter = point + offset;
-
-				//					uint3 index = GetIndex(center, dimensions, voxelSize, voxelCenter);
-				//					if (index.x == UINT_MAX || index.y == UINT_MAX || index.z == UINT_MAX) continue;
-
-				//					size_t flatIndex = GetFlatIndex(index, dimensions);
-
-				//					Voxel& voxel = d_volume[flatIndex];
-				//					float distance = (voxelCenter - point).norm();
-				//					atomicMinFloat(&voxel.minDistance, distance);
-
-				//					if (fabs(distance - voxel.minDistance) < 1e-6f) {
-				//						float tsdfValue = distance / truncationDistance;
-				//						tsdfValue = (voxelCenter - point).dot(normal) > 0 ? tsdfValue : -tsdfValue;
-
-				//						voxel.tsdfValue = tsdfValue;
-
-				//						//if (1.0f < voxel.tsdfValue) voxel.tsdfValue = 1.0f;
-				//						//if (-1.0f > voxel.tsdfValue) voxel.tsdfValue = -1.0f;
-
-				//						voxel.weight++;
-
-				//						voxel.color.x() = (voxel.color.x() + color.x()) / 2.0f;
-				//						voxel.color.y() = (voxel.color.y() + color.y()) / 2.0f;
-				//						voxel.color.z() = (voxel.color.z() + color.z()) / 2.0f;
-
-				//						voxel.normal.x() = (voxel.normal.x() + normal.x()) / 2.0f;
-				//						voxel.normal.y() = (voxel.normal.y() + normal.y()) / 2.0f;
-				//						voxel.normal.z() = (voxel.normal.z() + normal.z()) / 2.0f;
-				//					}
-				//				}
-				//			}
-				//		}
-				//	});
-
-				//	nvtxRangePop();
-				//	t = Time::End(t, "Insert Points");
-				//}
 
 				{
 					t = Time::Now();
@@ -817,11 +755,14 @@ namespace CUDA
 				size_t iy = (index / 100) % 100;
 				size_t iz = index / 10000;
 
-				float dx = 50.0f - (float)ix;
-				float dy = 50.0f - (float)iy;
-				float dz = 50.0f - (float)iz;
-				float distance = sqrtf(dx * dx + dy * dy + dz * dz);
-				d_volume[index] = distance - 2.5f;
+				float amplitude = 1.0f;
+				float frequency = 1.0f;
+
+				float x = (float)ix * 0.1f;
+				float y = (float)iy * 0.1f;
+				float z = (float)iz * 0.1f;
+				float distance = amplitude * sinf(frequency * x) * sinf(frequency * (y - 3.0f)) * sinf(frequency * z);
+				d_volume[index] = (y - distance);
 
 				//printf("distance : %f\n", distance);
 			});
@@ -858,7 +799,7 @@ namespace CUDA
 				make_float3(-5.0f, -5.0f, -5.0f),
 				make_float3(5.0f, 5.0f, 5.0f),
 				0.1f,
-				2.5f);
+				1.0f);
 			
 			auto result = mc.Extract();
 			
@@ -896,13 +837,13 @@ namespace CUDA
 			delete result.vertices;
 			delete result.triangles;
 		}
-
+		
 		void TestMarchingCubes_Fuse()
 		{
 			auto t = Time::Now();
 
-			Eigen::Vector3f volumeMin(-15.0f, -15.0f, -15.0f);
-			Eigen::Vector3f volumeMax(15.0f, 15.0f, 15.0f);
+			Eigen::Vector3f volumeMin(-20.0f, -20.0f, -20.0f);
+			Eigen::Vector3f volumeMax(20.0f, 20.0f, 20.0f);
 			Eigen::Vector3f diff = volumeMax - volumeMin;
 			Eigen::Vector3f volumeCenter = (volumeMax + volumeMin) * 0.5f;
 			float voxelSize = 0.1f;
@@ -972,20 +913,22 @@ namespace CUDA
 							for (int dy = -voxelNeighborRange; dy <= voxelNeighborRange; ++dy) {
 								for (int dz = -voxelNeighborRange; dz <= voxelNeighborRange; ++dz) {
 									Eigen::Vector3f offset(dx * voxelSize, dy * voxelSize, dz * voxelSize);
-									Eigen::Vector3f voxelCenter = point + offset;
+									Eigen::Vector3f voxelPosition = point + offset;
 
-									uint3 index = GetIndex(volumeCenter, dimensions, voxelSize, voxelCenter);
+									uint3 index = GetIndex(volumeCenter, dimensions, voxelSize, voxelPosition);
 									if (index.x == UINT_MAX || index.y == UINT_MAX || index.z == UINT_MAX) continue;
 
 									size_t flatIndex = GetFlatIndex(index, dimensions);
 
+									voxelPosition = GetPosition(volumeCenter, dimensions, voxelSize, index);
+
 									Voxel& voxel = d_volume[flatIndex];
-									float distance = (voxelCenter - point).norm();
+									float distance = (voxelPosition - point).norm();
 									atomicMinFloat(&voxel.minDistance, distance);
 
 									if (fabs(distance - voxel.minDistance) < 1e-6f) {
 										float tsdfValue = distance / truncationDistance;
-										tsdfValue = (voxelCenter - point).dot(normal) > 0 ? tsdfValue : -tsdfValue;
+										tsdfValue = (voxelPosition - point).dot(normal) > 0 ? tsdfValue : -tsdfValue;
 
 										voxel.tsdfValue = tsdfValue;
 
@@ -1021,8 +964,8 @@ namespace CUDA
 
 			::MarchingCubes::MarchingCubesSurfaceExtractor<float> mc(
 				d_field,
-				make_float3(-15.0f, -15.0f, -15.0f),
-				make_float3(15.0f, 15.0f, 15.0f),
+				make_float3(-20.0f, -20.0f, -20.0f),
+				make_float3(20.0f, 20.0f, 20.0f),
 				0.1f,
 				0.0f);
 
