@@ -11,20 +11,20 @@ void AppStartCallback_Capture(App* pApp)
 			CaptureNextFrame(pApp);
 		}
 
-		static size_t index = 0;
+		//static size_t index = 0;
 
-		auto kdTreePoints = (vector<Eigen::Vector3f>*)pApp->registry["kdTreePoints"];
-		auto kdTreeColors = (vector<Color4>*)pApp->registry["kdTreeColors"];
+		//auto kdTreePoints = (vector<Eigen::Vector3f>*)pApp->registry["kdTreePoints"];
+		//auto kdTreeColors = (vector<Color4>*)pApp->registry["kdTreeColors"];
 
-		auto& p = (*kdTreePoints)[index];
-		auto& c = (*kdTreeColors)[index];
+		//auto& p = (*kdTreePoints)[index];
+		//auto& c = (*kdTreeColors)[index];
 
-		VD::AddSphere("points",
-			p,
-			{ 0.05f,0.05f,0.05f },
-			{ 0.0f, 0.0f, 1.0f },
-			c);
-		index++;
+		//VD::AddSphere("points",
+		//	p,
+		//	{ 0.05f,0.05f,0.05f },
+		//	{ 0.0f, 0.0f, 1.0f },
+		//	c);
+		//index++;
 
 		return true;
 	});
@@ -73,13 +73,11 @@ void AppStartCallback_Capture(App* pApp)
 
 	auto camera = renderer->GetActiveCamera();
 	camera->SetParallelProjection(true);
-	// Parallel Scale�� ī�޶� ���� ����
-	// �ȼ��� 3D ������ ���� * â ���� / 2
-	// ���⿡�� 256 x 480�̹Ƿ� �ȼ��� 0.1, â���� 480
+	// Parallel Scale은 카메라 절반 높이
+	// 픽셀당 3D 공간의 유닛 * 창 높이 / 2
+	// 여기에선 256 x 480이므로 픽셀당 0.1, 창높이 480
 	// 480 * 0.1 / 2 = 24
 	camera->SetParallelScale(24);
-
-	//SaveTRNFile();
 
 	LoadTRNFile();
 

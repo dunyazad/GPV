@@ -41,9 +41,9 @@ void LoadPatch(int patchID, vtkRenderer* renderer);
 
 tuple<Eigen::Matrix4f, Eigen::Vector3f> LoadPatchTransform(int patchID);
 
-void SaveTRNFile();
+void SaveTRNFile(int from = 0, int to = -1);
 
-void LoadTRNFile();
+void LoadTRNFile(int from = 0, int to = -1);
 
 void LoadModel(vtkRenderer* renderer, const string& filename);
 
@@ -55,6 +55,7 @@ void LoadDepthImage();
 
 bool AppStartCallback(App* pApp);
 void AppStartCallback_Capture(App* pApp);
+void AppStartCallback_SaveTRN(App* pApp);
 void AppStartCallback_HashMap(App* pApp);
 void AppStartCallback_Integrate(App* pApp);
 void AppStartCallback_MarchingCubes(App* pApp);

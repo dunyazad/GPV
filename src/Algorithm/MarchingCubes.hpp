@@ -708,6 +708,11 @@ namespace MarchingCubes
 
 			if (cornerFlatIndex < internal->numberOfVoxels) {
 				tsdf[i] = internal->data[cornerFlatIndex];
+
+				if (200 == cornerIndex.x && 200 == cornerIndex.y && 200 == cornerIndex.z)
+				{
+					printf("======================== %f\n", tsdf[i]);
+				}
 			}
 			else {
 				tsdf[i] = FLT_MAX;
@@ -809,7 +814,7 @@ namespace MarchingCubes
 			(float)indexX * internal->voxelSize,
 			(float)indexY * internal->voxelSize,
 			(float)indexZ * internal->voxelSize);
-
+		
 		float tsdf[8];
 		for (int i = 0; i < 8; ++i) {
 			uint3 cornerIndex = make_uint3(

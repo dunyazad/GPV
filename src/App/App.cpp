@@ -1,4 +1,6 @@
 #include <App/App.h>
+#include <CUDA/CUDA.cuh>
+#include <App/Serialization.hpp>
 
 set<App*> App::s_instances;
 
@@ -66,6 +68,8 @@ void App::Run()
 		MaximizeConsoleWindowOnMonitor(1);
 	}
 #endif
+
+	vtkObject::GlobalWarningDisplayOff();
 
 	renderer = vtkSmartPointer<vtkRenderer>::New();
 	renderer->SetBackground(0.3, 0.5, 0.7);
@@ -637,14 +641,6 @@ void App::CaptureAsPointCloud(const string& saveDirectory)
 	ss << captureCount++;
 	std::string pointCloudFileName = saveDirectory + "\\point_" + ss.str() + ".ply";
 
-	auto normals = vtkSmartPointer<vtkFloatArray>::New();
-	normals->SetNumberOfComponents(3);
-	normals->SetName("Normals");
-
-	auto colors = vtkSmartPointer<vtkUnsignedCharArray>::New();
-	colors->SetNumberOfComponents(3); // RGB
-	colors->SetName("Colors");
-
 	auto windowToColorImageFilter = vtkSmartPointer<vtkWindowToImageFilter>::New();
 	windowToColorImageFilter->SetInput(renderWindow);
 	//windowToColorImageFilter->SetMagnification(1); // Optional, set to >1 for higher resolution
@@ -674,6 +670,8 @@ void App::CaptureAsPointCloud(const string& saveDirectory)
 
 	vector<Eigen::Vector3f> inputPoints;
 
+	PLYFormat ply;
+
 	vtkIdType index = 0;
 	for (float y = -24.0f; y < 24.0f; y += 0.1f)
 	{
@@ -685,14 +683,16 @@ void App::CaptureAsPointCloud(const string& saveDirectory)
 				auto p = Transform(tm, { x, y, -depth * depthRatio });
 				//auto p = Eigen::Vector3f(x, y, -depth * depthRatio);
 
+				ply.AddPointFloat3(p.data());
+
 				inputPoints.push_back(p);
 
-				points->InsertNextPoint(p.x(), p.y(), p.z());
+				//points->InsertNextPoint(p.x(), p.y(), p.z());
 
 				unsigned char rgb[3];
 				colorArray->GetTypedTuple(index, rgb);
 
-				colors->InsertNextTuple3(rgb[0], rgb[1], rgb[2]);
+				ply.AddColor((float)rgb[0] / 255.0f, (float)rgb[1] / 255.0f, (float)rgb[2] / 255.0f);
 			}
 			else
 			{
@@ -705,52 +705,18 @@ void App::CaptureAsPointCloud(const string& saveDirectory)
 		}
 	}
 
+	vector<Eigen::Vector3f> h_normals;
+	CUDA::cuCache::GeneratePatchNormals(256, 480, inputPoints, h_normals);
 
-	//{
-	//	float3* d_points;
-	//	float3* d_normals;
-	//	cudaMallocManaged(&d_points, sizeof(float3) * 256 * 480);
-	//	cudaMallocManaged(&d_normals, sizeof(float3) * 256 * 480);
+	for (size_t i = 0; i < h_normals.size(); i++)
+	{
+		float depth = depthArray->GetValue(i);
+		if (depth < 1.0f)
+		{
+			auto n = h_normals[i];
+			ply.AddNormalFloat3(n.data());
+		}
+	}
 
-	//	cudaDeviceSynchronize();
-
-	//	cudaMemcpy(d_points, inputPoints.data(), sizeof(float3) * 256 * 480, cudaMemcpyHostToDevice);
-
-	//	CUDA::GeneratePatchNormals(256, 480, d_points, 256 * 480, d_normals);
-
-	//	for (size_t i = 0; i < inputPoints.size(); i++)
-	//	{
-	//		float depth = depthArray->GetValue(i);
-	//		if (depth < 1.0f)
-	//		{
-	//			auto n = d_normals[i];
-	//			normals->InsertNextTuple3(n.x, n.y, n.z);
-	//		}
-	//	}
-
-	//	cudaFree(d_points);
-	//	cudaFree(d_normals);
-	//}
-
-	vtkNew<vtkPolyData> polyData;
-	polyData->SetPoints(points);
-
-	vtkNew<vtkVertexGlyphFilter> vertexFilter;
-	vertexFilter->SetInputData(polyData);
-	vertexFilter->Update();
-	polyData->ShallowCopy(vertexFilter->GetOutput());
-
-	polyData->GetPointData()->SetNormals(normals);
-	polyData->GetPointData()->SetScalars(colors);
-	//polyData->GetPointData()->SetAttribute(colors, vtkDataSetAttributes::SCALARS);
-
-	vtkNew<vtkPLYWriter> plyWriter;
-	plyWriter->SetFileName(pointCloudFileName.c_str());
-	plyWriter->SetInputData(polyData);
-	plyWriter->SetFileTypeToASCII();
-	plyWriter->SetColorModeToDefault();
-	plyWriter->SetArrayName("Normals");
-	plyWriter->SetArrayName("Colors");
-	//plyWriter->Update();
-	plyWriter->Write();
+	ply.Serialize(pointCloudFileName);
 }

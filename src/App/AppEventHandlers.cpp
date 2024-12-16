@@ -128,43 +128,43 @@ bool OnKeyPress(App* app)
 	}
 	else if (key == "1")
 	{
-		VisualDebugging::ToggleVisibility("Cubes_0");
+		VisualDebugging::ToggleVisibilityByIndex(0);
 	}
 	else if (key == "2")
 	{
-		VisualDebugging::ToggleVisibility("Cubes_1");
+	VisualDebugging::ToggleVisibilityByIndex(1);
 	}
 	else if (key == "3")
 	{
-	VisualDebugging::ToggleVisibility("Cubes_2");
+	VisualDebugging::ToggleVisibilityByIndex(2);
 	}
 	else if (key == "4")
 	{
-	VisualDebugging::ToggleVisibility("Cubes_3");
+	VisualDebugging::ToggleVisibilityByIndex(3);
 	}
 	else if (key == "5")
 	{
-	VisualDebugging::ToggleVisibility("Cubes_4");
+	VisualDebugging::ToggleVisibilityByIndex(4);
 	}
 	else if (key == "6")
 	{
-	VisualDebugging::ToggleVisibility("Cubes_5");
+	VisualDebugging::ToggleVisibilityByIndex(5);
 	}
 	else if (key == "7")
 	{
-	VisualDebugging::ToggleVisibility("Cubes_6");
+	VisualDebugging::ToggleVisibilityByIndex(6);
 	}
 	else if (key == "8")
 	{
-	VisualDebugging::ToggleVisibility("Cubes_7");
+	VisualDebugging::ToggleVisibilityByIndex(7);
 	}
 	else if (key == "9")
 	{
-	VisualDebugging::ToggleVisibility("Cubes_8");
+	VisualDebugging::ToggleVisibilityByIndex(8);
 	}
 	else if (key == "0")
 	{
-	VisualDebugging::ToggleVisibility("Cubes_9");
+	VisualDebugging::ToggleVisibilityByIndex(9);
 	}
 	else if (key == "Left")
 	{

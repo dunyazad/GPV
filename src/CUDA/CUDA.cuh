@@ -49,6 +49,7 @@ namespace CUDA
 		};
 
 		void GeneratePatchNormals(int width, int height, float3* points, size_t numberOfPoints, float3* normals);
+		void GeneratePatchNormals(int width, int height, const std::vector<Eigen::Vector3f>& points, std::vector<Eigen::Vector3f>& normals);
 
 		void ClearVolume(Voxel* volume, uint3 volumeDimension);
 

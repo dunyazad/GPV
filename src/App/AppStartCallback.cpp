@@ -182,15 +182,16 @@ tuple<Eigen::Matrix4f, Eigen::Vector3f> LoadPatchTransform(int patchID)
 	return make_tuple(Eigen::Matrix4f(transform_0), Eigen::Vector3f(cameraPosition));
 }
 
-void SaveTRNFile()
+void SaveTRNFile(int from, int to)
 {
 	ofstream ofs;
 	ofs.open("C:\\Debug\\Patches\\transforms.trn", ios::out | ios::binary);
 
-	int numberOfTransforms = 4252;
+	int numberOfTransforms = 526;
+	if (to > from) numberOfTransforms = to - from;
 	ofs.write((char*)&numberOfTransforms, sizeof(int));
 
-	for (size_t i = 0; i < 4252; i++)
+	for (size_t i = from; i < from + numberOfTransforms; i++)
 	{
 		printf("Patch : %4d\n", i);
 
@@ -198,11 +199,13 @@ void SaveTRNFile()
 
 		ofs.write((char*)transform.data(), sizeof(float) * 16);
 		ofs.write((char*)cameraPosition.data(), sizeof(float) * 3);
+
+		printf("Camera Position : %f, %f, %f\n", cameraPosition.x(), cameraPosition.y(), cameraPosition.z());
 	}
 	ofs.close();
 }
 
-void LoadTRNFile()
+void LoadTRNFile(int from, int to)
 {
 	ifstream ifs;
 	ifs.open("C:\\Debug\\Patches\\transforms.trn", ios::in | ios::binary);
@@ -210,7 +213,9 @@ void LoadTRNFile()
 	int numberOfTransforms = 0;
 	ifs.read((char*)&numberOfTransforms, sizeof(int));
 
-	for (size_t i = 0; i < numberOfTransforms; i++)
+	if (to > from) numberOfTransforms = to;
+
+ 	for (size_t i = from; i < numberOfTransforms; i++)
 	{
 		printf("Patch %4d\n", i);
 
@@ -311,6 +316,9 @@ void MoveCamera(App* pApp, vtkCamera* camera, const Eigen::Matrix4f& tm)
 	//float world_height = 480.0f * pixel_to_world_ratio;
 	//camera->SetParallelScale(world_height / 2);
 
+	printf("Camera Position : %f, %f, %f\n", cameraPosition.x(), cameraPosition.y(), cameraPosition.z());
+	printf("Focal Point : %f, %f, %f\n", position.x(), position.y(), position.z());
+
 	camera->Modified();
 
 	pApp->GetRenderer()->ResetCameraClippingRange();
@@ -378,6 +386,9 @@ void LoadDepthImage()
 
 bool AppStartCallback(App* pApp)
 {
+	//AppStartCallback_SaveTRN(pApp);
+	//AppStartCallback_Capture(pApp);
+
 	//AppStartCallback_Integrate(pApp);
 	//AppStartCallback_Convert(pApp);
 	//AppStartCallback_LoadPNT(pApp);
@@ -392,6 +403,8 @@ bool AppStartCallback(App* pApp)
 	//AppStartCallback_SVO(pApp);
 	//AppStartCallback_HashMap(pApp);
 	//AppStartCallback_PSR(pApp);
+	
 	AppStartCallback_MarchingCubes(pApp);
+
 	return true;
 }

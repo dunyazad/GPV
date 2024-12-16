@@ -418,6 +418,7 @@ namespace CUDA
 
 			normals[threadid] = mean;
 		}
+
 		void GeneratePatchNormals(int width, int height, float3* points, size_t numberOfPoints, float3* normals)
 		{
 			{
@@ -449,6 +450,26 @@ namespace CUDA
 
 			//	nvtxRangePop();
 			//}
+		}
+
+		void GeneratePatchNormals(int width, int height, const std::vector<Eigen::Vector3f>& points, std::vector<Eigen::Vector3f>& normals)
+		{
+			float3* d_points;
+			float3* d_normals;
+			cudaMallocManaged(&d_points, sizeof(float3) * 256 * 480);
+			cudaMallocManaged(&d_normals, sizeof(float3) * 256 * 480);
+
+			cudaDeviceSynchronize();
+
+			cudaMemcpy(d_points, points.data(), sizeof(float3) * 256 * 480, cudaMemcpyHostToDevice);
+
+			GeneratePatchNormals(256, 480, d_points, 256 * 480, d_normals);
+
+			normals.resize(256 * 480);
+			cudaMemcpy(normals.data(), d_normals, sizeof(float3) * 256 * 480, cudaMemcpyDeviceToHost);
+
+			cudaFree(d_points);
+			cudaFree(d_normals);
 		}
 
 		__global__ void Kernel_ClearVolume(Voxel* volume, uint3 volumeDimension)

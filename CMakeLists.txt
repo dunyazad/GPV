@@ -87,6 +87,7 @@ set(source_list
     src/App/AppStartCallback_Octree.cpp
     src/App/AppStartCallback_PSR.cpp
     src/App/AppStartCallback_RegularGrid.cpp
+    src/App/AppStartCallback_SaveTRN.cpp
     src/App/AppStartCallback_Simple.cpp
     src/App/AppStartCallback_SVO.cpp
     src/App/USBHandler.h

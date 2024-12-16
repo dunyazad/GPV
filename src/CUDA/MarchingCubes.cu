@@ -61,23 +61,23 @@ namespace CUDA
 				sizeof(Eigen::Vector3f) * numberOfInputPoints,
 				cudaMemcpyHostToDevice);
 
-			//for (size_t i = 0; i < ply.GetPoints().size() / 3; i++)
-			//{
-			//	auto px = ply.GetPoints()[i * 3 + 0];
-			//	auto py = ply.GetPoints()[i * 3 + 1];
-			//	auto pz = ply.GetPoints()[i * 3 + 2];
+			for (size_t i = 0; i < ply.GetPoints().size() / 3; i++)
+			{
+				auto px = ply.GetPoints()[i * 3 + 0];
+				auto py = ply.GetPoints()[i * 3 + 1];
+				auto pz = ply.GetPoints()[i * 3 + 2];
 
-			//	auto nx = ply.GetNormals()[i * 3 + 0];
-			//	auto ny = ply.GetNormals()[i * 3 + 1];
-			//	auto nz = ply.GetNormals()[i * 3 + 2];
+				auto nx = ply.GetNormals()[i * 3 + 0];
+				auto ny = ply.GetNormals()[i * 3 + 1];
+				auto nz = ply.GetNormals()[i * 3 + 2];
 
-			//	auto cx = ply.GetColors()[i * 3 + 0];
-			//	auto cy = ply.GetColors()[i * 3 + 1];
-			//	auto cz = ply.GetColors()[i * 3 + 2];
+				auto cx = ply.GetColors()[i * 3 + 0];
+				auto cy = ply.GetColors()[i * 3 + 1];
+				auto cz = ply.GetColors()[i * 3 + 2];
 
-			//	auto c4 = Color4::FromNormalized(cx, cy, cz, 1.0f);
-			//	VD::AddSphere("points", { px, py, pz }, { 0.05f, 0.05f, 0.05f }, { nx, ny, nz }, c4);
-			//}
+				auto c4 = Color4::FromNormalized(cx, cy, cz, 1.0f);
+				VD::AddSphere("points", { px, py, pz }, { 0.05f, 0.05f, 0.05f }, { nx, ny, nz }, c4);
+			}
 		}
 #pragma endregion
 
@@ -90,39 +90,6 @@ namespace CUDA
 			float weight;
 			__host__ __device__ Voxel() : minDistance(FLT_MAX), tsdfValue(FLT_MAX), normal(0.0f, 0.0f, 0.0f), color(1.0f, 1.0f, 1.0f), weight(0.0f) {}
 		};
-
-		__host__ __device__
-			uint64_t GetMortonCode(
-				const Eigen::Vector3f& min,
-				const Eigen::Vector3f& max,
-				int maxDepth,
-				const Eigen::Vector3f& position) {
-			// Validate and compute range
-			Eigen::Vector3f range = max - min;
-			range = range.cwiseMax(Eigen::Vector3f::Constant(1e-6f)); // Avoid zero range
-
-			// Normalize position
-			Eigen::Vector3f relativePos = (position - min).cwiseQuotient(range);
-
-			// Clamp to [0, 1]
-			relativePos = relativePos.cwiseMax(0.0f).cwiseMin(1.0f);
-
-			// Scale to Morton grid size
-			uint32_t maxCoordinateValue = (1 << maxDepth) - 1; // maxCoordinateValue = 1 for maxDepth = 1
-			uint32_t x = static_cast<uint32_t>(roundf(relativePos.x() * maxCoordinateValue));
-			uint32_t y = static_cast<uint32_t>(roundf(relativePos.y() * maxCoordinateValue));
-			uint32_t z = static_cast<uint32_t>(roundf(relativePos.z() * maxCoordinateValue));
-
-			// Compute Morton code
-			uint64_t mortonCode = 0;
-			for (int i = 0; i < maxDepth; ++i) {
-				mortonCode |= ((x >> i) & 1ULL) << (3 * i);
-				mortonCode |= ((y >> i) & 1ULL) << (3 * i + 1);
-				mortonCode |= ((z >> i) & 1ULL) << (3 * i + 2);
-			}
-
-			return mortonCode;
-		}
 
 		__host__ __device__
 			uint3 GetIndex(const Eigen::Vector3f& gridCenter, uint3 gridDimensions, float voxelSize, const Eigen::Vector3f& position)
@@ -877,17 +844,21 @@ namespace CUDA
 
 			PatchBuffers patchBuffers(256, 480);
 
-			//size_t i = 3;
+			//size_t i = 0;
 			for (size_t i = 0; i < 10; i++)
-				//for (size_t i = 0; i < 4252; i++)
+			//for (size_t i = 0; i < 4252; i++)
 			{
 				stringstream ss;
 				ss << "C:\\Resources\\2D\\Captured\\PointCloud\\point_" << i << ".ply";
+				//ss << "C:\\Resources\\2D\\Captured\\PointCloud\\point_crop.ply";
 
 				PLYFormat ply;
 				ply.Deserialize(ss.str());
 
 				patchBuffers.FromPLYFile(ply);
+				auto d_patchBuffersPoints = thrust::raw_pointer_cast(patchBuffers.inputPoints.data());
+				auto d_patchBuffersNormals = thrust::raw_pointer_cast(patchBuffers.inputNormals.data());
+				auto d_patchBuffersColors = thrust::raw_pointer_cast(patchBuffers.inputColors.data());
 
 				Time::End(t, "Loading PointCloud Patch", i);
 
@@ -896,57 +867,56 @@ namespace CUDA
 					nvtxRangePushA("Insert Points");
 
 					thrust::for_each(
-						thrust::make_zip_iterator(thrust::make_tuple(
-							patchBuffers.inputPoints.begin(),
-							patchBuffers.inputNormals.begin(),
-							patchBuffers.inputColors.begin())),
-						thrust::make_zip_iterator(thrust::make_tuple(
-							patchBuffers.inputPoints.end(),
-							patchBuffers.inputNormals.end(),
-							patchBuffers.inputColors.end())),
-						[=] __device__(thrust::tuple<Eigen::Vector3f, Eigen::Vector3f, Eigen::Vector3f> t) {
-						Eigen::Vector3f point = thrust::get<0>(t);
-						Eigen::Vector3f normal = thrust::get<1>(t);
-						Eigen::Vector3f color = thrust::get<2>(t);
+						thrust::counting_iterator<size_t>(0),
+						thrust::counting_iterator<size_t>(patchBuffers.numberOfInputPoints),
+						[=] __device__(size_t pointIndex) {
 
-						for (int dx = -voxelNeighborRange; dx <= voxelNeighborRange; ++dx) {
-							for (int dy = -voxelNeighborRange; dy <= voxelNeighborRange; ++dy) {
-								for (int dz = -voxelNeighborRange; dz <= voxelNeighborRange; ++dz) {
-									Eigen::Vector3f offset(dx * voxelSize, dy * voxelSize, dz * voxelSize);
-									Eigen::Vector3f voxelPosition = point + offset;
+						Eigen::Vector3f& point = d_patchBuffersPoints[pointIndex];
+						Eigen::Vector3f& normal = d_patchBuffersNormals[pointIndex];
+						Eigen::Vector3f& color = d_patchBuffersColors[pointIndex];
 
-									uint3 index = GetIndex(volumeCenter, dimensions, voxelSize, voxelPosition);
-									if (index.x == UINT_MAX || index.y == UINT_MAX || index.z == UINT_MAX) continue;
+						uint3 index = GetIndex(volumeCenter, dimensions, voxelSize, point);
+						if (index.x == UINT_MAX || index.y == UINT_MAX || index.z == UINT_MAX) return;
 
-									size_t flatIndex = GetFlatIndex(index, dimensions);
+						for (int nz = index.z - voxelNeighborRange; nz < index.z + voxelNeighborRange; nz++)
+						{
+							if (dimensions.z <= nz) continue;
 
-									voxelPosition = GetPosition(volumeCenter, dimensions, voxelSize, index);
+							for (int ny = index.y - voxelNeighborRange; ny < index.y + voxelNeighborRange; ny++)
+							{
+								if (dimensions.y <= ny) continue;
+
+								for (int nx = index.x - voxelNeighborRange; nx < index.x + voxelNeighborRange; nx++)
+								{
+									if (dimensions.x <= nx) continue;
+
+									auto neighborIndex = make_uint3(nx, ny, nz);
+									auto voxelPosition = GetPosition(volumeCenter, dimensions, voxelSize, neighborIndex);
+
+									auto flatIndex = GetFlatIndex(neighborIndex, dimensions);
 
 									Voxel& voxel = d_volume[flatIndex];
 									float distance = (voxelPosition - point).norm();
 									atomicMinFloat(&voxel.minDistance, distance);
 
-									//if (fabs(distance - voxel.minDistance) < 1e-6f) {
-									//if (distance <= voxel.minDistance) {
-										float tsdfValue = distance;// / truncationDistance;
-										tsdfValue = (voxelPosition - point).dot(normal) > 0 ? tsdfValue : -tsdfValue;
+									float tsdfValue = distance;// / truncationDistance;
+									tsdfValue = (voxelPosition - point).dot(normal) > 0 ? tsdfValue : -tsdfValue;
 
-										float fused = (voxel.weight * voxel.tsdfValue + tsdfValue) / (voxel.weight + 1.0f);
-										voxel.tsdfValue = fused;
+									float newTSDFValue = (voxel.weight * voxel.tsdfValue + tsdfValue) / (voxel.weight + 1.0f);
+									voxel.tsdfValue = newTSDFValue;
 
-										if (1.0f < voxel.tsdfValue) voxel.tsdfValue = 1.0f;
-										if (-1.0f > voxel.tsdfValue) voxel.tsdfValue = -1.0f;
+									if (1.0f < voxel.tsdfValue) voxel.tsdfValue = 1.0f;
+									if (-1.0f > voxel.tsdfValue) voxel.tsdfValue = -1.0f;
 
-										voxel.weight = voxel.weight + 1.0f;
+									voxel.weight = voxel.weight + 1.0f;
 
-										voxel.color.x() = (voxel.color.x() + color.x()) / 2.0f;
-										voxel.color.y() = (voxel.color.y() + color.y()) / 2.0f;
-										voxel.color.z() = (voxel.color.z() + color.z()) / 2.0f;
+									voxel.color.x() = (voxel.color.x() + color.x()) / 2.0f;
+									voxel.color.y() = (voxel.color.y() + color.y()) / 2.0f;
+									voxel.color.z() = (voxel.color.z() + color.z()) / 2.0f;
 
-										voxel.normal.x() = (voxel.normal.x() + normal.x()) / 2.0f;
-										voxel.normal.y() = (voxel.normal.y() + normal.y()) / 2.0f;
-										voxel.normal.z() = (voxel.normal.z() + normal.z()) / 2.0f;
-									//}
+									voxel.normal.x() = (voxel.normal.x() + normal.x()) / 2.0f;
+									voxel.normal.y() = (voxel.normal.y() + normal.y()) / 2.0f;
+									voxel.normal.z() = (voxel.normal.z() + normal.z()) / 2.0f;
 								}
 							}
 						}
@@ -957,11 +927,23 @@ namespace CUDA
 				}
 			}
 
-			thrust::device_vector<float> field(dimensions.x* dimensions.y* dimensions.z);
+			thrust::device_vector<float> field(dimensions.x * dimensions.y * dimensions.z);
 			auto d_field = thrust::raw_pointer_cast(field.data());
 			thrust::for_each(thrust::counting_iterator<unsigned int>(0), thrust::counting_iterator<unsigned int>(dimensions.x * dimensions.y * dimensions.z),
 				[=] __device__(unsigned int index) {
 				d_field[index] = d_volume[index].tsdfValue;
+
+				//auto zIndex =  index / (dimensions.x * dimensions.y);
+				//auto yIndex = (index % (dimensions.x * dimensions.y)) / dimensions.x;
+				//auto xIndex = (index % (dimensions.x * dimensions.y)) % dimensions.x;
+
+				//if (200 == xIndex && 200 == yIndex && 200 == zIndex)
+				//{
+				//	if (FLT_MAX == d_field[index])
+				//	{
+				//		printf("tsdfValue : %f\n", d_field[index]);
+				//	}
+				//}
 			});
 
 			::MarchingCubes::MarchingCubesSurfaceExtractor<float> mc(
@@ -970,8 +952,28 @@ namespace CUDA
 				make_float3(20.0f, 20.0f, 20.0f),
 				0.1f,
 				0.0f);
-
+			
 			auto result = mc.Extract();
+
+			{
+				thrust::host_vector<float> h_field(mc.h_internal->numberOfVoxels);
+				auto t_field = thrust::raw_pointer_cast(h_field.data());
+				cudaMemcpy(t_field, mc.h_internal->data, sizeof(float)* mc.h_internal->numberOfVoxels, cudaMemcpyDeviceToHost);
+				cudaDeviceSynchronize();
+				
+				for (size_t i = 0; i < h_field.size(); i++)
+				{
+					auto zIndex = i / (dimensions.x * dimensions.y);
+					auto yIndex = (i % (dimensions.x * dimensions.y)) / dimensions.x;
+					auto xIndex = (i % (dimensions.x * dimensions.y)) % dimensions.x;
+
+					if (FLT_MAX != h_field[i])
+					{
+						auto position = GetPosition({ 0.0f, 0.0f, 0.0f }, dimensions, voxelSize, make_uint3(xIndex, yIndex, zIndex));
+						VD::AddCube("occupied", position, { 0.05f, 0.05f, 0.05f }, { 0.0f, 0.0f, 1.0f }, Color4::White);
+					}
+				}
+			}
 
 			PLYFormat ply;
 
