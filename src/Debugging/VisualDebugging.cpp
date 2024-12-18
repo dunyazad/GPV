@@ -269,7 +269,7 @@ vtkSmartPointer<vtkActor> VisualDebugging::GetPointActor(const string& layerName
 	auto layer = GetLayer(layerName);
 	if (nullptr != layer)
 	{
-		return layer->GetPointActor();
+		return layer->elements["Points"]->actor;
 	}
 	else
 	{
@@ -282,7 +282,7 @@ vtkSmartPointer<vtkActor> VisualDebugging::GetLineActor(const string& layerName)
 	auto layer = GetLayer(layerName);
 	if (nullptr != layer)
 	{
-		return layer->GetLineActor();
+		return layer->elements["Lines"]->actor;
 	}
 	else
 	{
@@ -295,7 +295,7 @@ vtkSmartPointer<vtkActor> VisualDebugging::GetTriangleActor(const string& layerN
 	auto layer = GetLayer(layerName);
 	if (nullptr != layer)
 	{
-		return layer->GetTriangleActor();
+		return layer->elements["Triangles"]->actor;
 	}
 	else
 	{
@@ -308,7 +308,7 @@ vtkSmartPointer<vtkActor> VisualDebugging::GetSphereActor(const string& layerNam
 	auto layer = GetLayer(layerName);
 	if (nullptr != layer)
 	{
-		return layer->GetSphereActor();
+		return layer->elements["Spheres"]->actor;
 	}
 	else
 	{
@@ -321,7 +321,7 @@ vtkSmartPointer<vtkActor> VisualDebugging::GetCubeActor(const string& layerName)
 	auto layer = GetLayer(layerName);
 	if (nullptr != layer)
 	{
-		return layer->GetCubeActor();
+		return layer->elements["Cubes"]->actor;
 	}
 	else
 	{
@@ -334,7 +334,7 @@ vtkSmartPointer<vtkActor> VisualDebugging::GetGlyphActor(const string& layerName
 	auto layer = GetLayer(layerName);
 	if (nullptr != layer)
 	{
-		return layer->GetGlyphActor();
+		return layer->elements["Glyphs"]->actor;
 	}
 	else
 	{
@@ -347,20 +347,7 @@ vtkSmartPointer<vtkActor> VisualDebugging::GetArrowActor(const string& layerName
 	auto layer = GetLayer(layerName);
 	if (nullptr != layer)
 	{
-		return layer->GetArrowActor();
-	}
-	else
-	{
-		return nullptr;
-	}
-}
-
-vtkSmartPointer<vtkActor> VisualDebugging::GetWiredBoxActor(const string& layerName)
-{
-	auto layer = GetLayer(layerName);
-	if (nullptr != layer)
-	{
-		return layer->GetWiredBoxActor();
+		return layer->elements["Arrows"]->actor;
 	}
 	else
 	{
@@ -407,6 +394,19 @@ void VisualDebugging::AddTriangle(const string& layerName, const Eigen::Vector3f
 	}
 
 	layer->AddTriangle(p0, p1, p2, color);
+
+	s_needToRender = true;
+}
+
+void VisualDebugging::AddSphere(const string& layerName, const Eigen::Vector3f& center, float scale, const Color4& color)
+{
+	auto layer = GetLayer(layerName);
+	if (nullptr == layer)
+	{
+		layer = CreateLayer(layerName);
+	}
+
+	layer->AddSphere(center, { scale, scale, scale }, { 0.0f, 0.0f, 1.0f }, color);
 
 	s_needToRender = true;
 }
@@ -469,19 +469,6 @@ void VisualDebugging::AddArrow(const string& layerName, const Eigen::Vector3f& c
 	}
 
 	layer->AddArrow(center, normal, scale, color);
-
-	s_needToRender = true;
-}
-
-void VisualDebugging::AddWiredBox(const string& layerName, const Eigen::Vector3f& boxMin, const Eigen::Vector3f& boxMax, const Color4& color)
-{
-	auto layer = GetLayer(layerName);
-	if (nullptr == layer)
-	{
-		layer = CreateLayer(layerName);
-	}
-
-	layer->AddWiredBox(boxMin, boxMax, color);
 
 	s_needToRender = true;
 }

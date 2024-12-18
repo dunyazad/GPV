@@ -9,7 +9,7 @@
 #include <Debugging/VisualDebugging.h>
 using VD = VisualDebugging;
 
-#include <App/AppStartCallback.h>
+#include <App/AppStartCallback/AppStartCallback.h>
 
 #define USE_CUDA
 #include <Algorithm/MarchingCubes.hpp>
@@ -552,7 +552,7 @@ namespace CUDA
 						{0.0f, 1.0f, 0.0f},
 						{1.0f, 1.0f, 0.0f},
 						{1.0f, 1.0f, 1.0f},
-						{0.0f, 1.0f, 1.0f} 
+						{0.0f, 1.0f, 1.0f}
 					};
 
 					float tsdf[8];
@@ -703,7 +703,7 @@ namespace CUDA
 
 						VD::AddTriangle("Mesh", v0, v1, v2, Color4::White);
 					}
-				
+
 					Time::End(t, "Marching Cubes");
 				}
 			}
@@ -767,9 +767,9 @@ namespace CUDA
 				make_float3(5.0f, 5.0f, 5.0f),
 				0.1f,
 				1.0f);
-			
+
 			auto result = mc.Extract();
-			
+
 			PLYFormat ply;
 
 			for (size_t i = 0; i < result.numberOfVertices; i++)
@@ -785,7 +785,7 @@ namespace CUDA
 				ply.AddIndex(t.y);
 				ply.AddIndex(t.z);
 			}
- 
+
 			ply.Serialize("C:\\Resources\\Debug\\TestSphere.ply");
 
 			for (size_t i = 0; i < result.numberOfTriangles; i++)
@@ -804,7 +804,7 @@ namespace CUDA
 			delete result.vertices;
 			delete result.triangles;
 		}
-		
+
 		void TestMarchingCubes_Fuse()
 		{
 			auto t = Time::Now();
@@ -817,7 +817,7 @@ namespace CUDA
 			float truncationDistance = 0.5f;
 			float isoValue = 0.0f;
 			int voxelNeighborRange = (int)ceilf(truncationDistance / voxelSize);
-			//voxelNeighborRange = 1;
+			voxelNeighborRange = 1;
 
 			uint3 dimensions;
 			dimensions.x = (uint32_t)ceilf(diff.x() / voxelSize);
@@ -845,8 +845,8 @@ namespace CUDA
 			PatchBuffers patchBuffers(256, 480);
 
 			//size_t i = 0;
-			for (size_t i = 0; i < 10; i++)
-			//for (size_t i = 0; i < 4252; i++)
+			//for (size_t i = 0; i < 10; i++)
+			for (size_t i = 0; i < 526; i++)
 			{
 				stringstream ss;
 				ss << "C:\\Resources\\2D\\Captured\\PointCloud\\point_" << i << ".ply";
@@ -952,15 +952,15 @@ namespace CUDA
 				make_float3(20.0f, 20.0f, 20.0f),
 				0.1f,
 				0.0f);
-			
+
 			auto result = mc.Extract();
 
 			{
 				thrust::host_vector<float> h_field(mc.h_internal->numberOfVoxels);
 				auto t_field = thrust::raw_pointer_cast(h_field.data());
-				cudaMemcpy(t_field, mc.h_internal->data, sizeof(float)* mc.h_internal->numberOfVoxels, cudaMemcpyDeviceToHost);
+				cudaMemcpy(t_field, mc.h_internal->data, sizeof(float) * mc.h_internal->numberOfVoxels, cudaMemcpyDeviceToHost);
 				cudaDeviceSynchronize();
-				
+
 				for (size_t i = 0; i < h_field.size(); i++)
 				{
 					auto zIndex = i / (dimensions.x * dimensions.y);
@@ -1010,12 +1010,221 @@ namespace CUDA
 			delete result.triangles;
 		}
 
+		void TestMarchingCubes_One()
+		{
+			auto t = Time::Now();
+
+			stringstream ss;
+			ss << "C:\\Resources\\3D\\PLY\\Complete\\Lower_pointcloud.ply";
+
+			PLYFormat ply;
+			ply.Deserialize(ss.str());
+			cout << "ply min : " << ply.GetAABB().min().transpose() << endl;
+			cout << "ply max : " << ply.GetAABB().max().transpose() << endl;
+
+			t = Time::End(t, "Load ply");
+
+			PatchBuffers patchBuffers(ply.GetPoints().size() / 3, 1);
+			patchBuffers.FromPLYFile(ply);
+
+			t = Time::End(t, "Copy data to device");
+
+			auto d_patchBuffersPoints = thrust::raw_pointer_cast(patchBuffers.inputPoints.data());
+			auto d_patchBuffersNormals = thrust::raw_pointer_cast(patchBuffers.inputNormals.data());
+			auto d_patchBuffersColors = thrust::raw_pointer_cast(patchBuffers.inputColors.data());
+
+			Time::End(t, "Loading PointCloud");
+
+			Eigen::Vector3f volumeMin(-20.0f, -20.0f, -20.0f);
+			Eigen::Vector3f volumeMax(20.0f, 20.0f, 20.0f);
+			Eigen::Vector3f diff = volumeMax - volumeMin;
+			Eigen::Vector3f volumeCenter = (volumeMax + volumeMin) * 0.5f;
+			float voxelSize = 0.2f;
+			float truncationDistance = 0.5f;
+			float isoValue = 0.0f;
+			int voxelNeighborRange = (int)ceilf(truncationDistance / voxelSize);
+			//voxelNeighborRange = 1;
+
+			uint3 dimensions;
+			dimensions.x = (uint32_t)ceilf(diff.x() / voxelSize);
+			dimensions.y = (uint32_t)ceilf(diff.y() / voxelSize);
+			dimensions.z = (uint32_t)ceilf(diff.z() / voxelSize);
+
+			size_t numberOfVoxels = dimensions.x * dimensions.y * dimensions.z;
+
+			thrust::device_vector<Voxel> volume(dimensions.x * dimensions.y * dimensions.z);
+			auto d_volume = thrust::raw_pointer_cast(volume.data());
+
+			thrust::for_each(thrust::counting_iterator((size_t)0), thrust::counting_iterator(volume.size()),
+				[=] __device__(size_t index) {
+				d_volume[index].minDistance = FLT_MAX;
+				d_volume[index].tsdfValue = FLT_MAX;
+				d_volume[index].weight = 0;
+				d_volume[index].normal = Eigen::Vector3f(0.0f, 0.0f, 0.0f);
+				d_volume[index].color = Eigen::Vector3f(1.0f, 1.0f, 1.0f);
+			});
+
+			Time::End(t, "Initialize Volume");
+
+			{
+				t = Time::Now();
+				nvtxRangePushA("Insert Points");
+
+				thrust::for_each(
+					thrust::counting_iterator<size_t>(0),
+					thrust::counting_iterator<size_t>(patchBuffers.numberOfInputPoints),
+					[=] __device__(size_t pointIndex) {
+
+					Eigen::Vector3f& point = d_patchBuffersPoints[pointIndex];
+					Eigen::Vector3f& normal = d_patchBuffersNormals[pointIndex];
+					Eigen::Vector3f& color = d_patchBuffersColors[pointIndex];
+
+					uint3 index = GetIndex(volumeCenter, dimensions, voxelSize, point);
+					if (index.x == UINT_MAX || index.y == UINT_MAX || index.z == UINT_MAX) return;
+
+					for (int nz = index.z - voxelNeighborRange; nz < index.z + voxelNeighborRange; nz++)
+					{
+						if (dimensions.z <= nz) continue;
+
+						for (int ny = index.y - voxelNeighborRange; ny < index.y + voxelNeighborRange; ny++)
+						{
+							if (dimensions.y <= ny) continue;
+
+							for (int nx = index.x - voxelNeighborRange; nx < index.x + voxelNeighborRange; nx++)
+							{
+								if (dimensions.x <= nx) continue;
+
+								auto neighborIndex = make_uint3(nx, ny, nz);
+								auto voxelPosition = GetPosition(volumeCenter, dimensions, voxelSize, neighborIndex);
+
+								auto flatIndex = GetFlatIndex(neighborIndex, dimensions);
+
+								Voxel& voxel = d_volume[flatIndex];
+								float distance = (voxelPosition - point).norm();
+								atomicMinFloat(&voxel.minDistance, distance);
+
+								float tsdfValue = distance;// / truncationDistance;
+								tsdfValue = (voxelPosition - point).dot(normal) > 0 ? tsdfValue : -tsdfValue;
+
+								float newTSDFValue = (voxel.weight * voxel.tsdfValue + tsdfValue) / (voxel.weight + 1.0f);
+								voxel.tsdfValue = newTSDFValue;
+
+								if (1.0f < voxel.tsdfValue) voxel.tsdfValue = 1.0f;
+								if (-1.0f > voxel.tsdfValue) voxel.tsdfValue = -1.0f;
+
+								voxel.weight = voxel.weight + 1.0f;
+
+								voxel.color.x() = (voxel.color.x() + color.x()) / 2.0f;
+								voxel.color.y() = (voxel.color.y() + color.y()) / 2.0f;
+								voxel.color.z() = (voxel.color.z() + color.z()) / 2.0f;
+
+								voxel.normal.x() = (voxel.normal.x() + normal.x()) / 2.0f;
+								voxel.normal.y() = (voxel.normal.y() + normal.y()) / 2.0f;
+								voxel.normal.z() = (voxel.normal.z() + normal.z()) / 2.0f;
+							}
+						}
+					}
+				});
+
+				nvtxRangePop();
+				t = Time::End(t, "Insert Points");
+			}
+
+			{
+				thrust::device_vector<float> field(dimensions.x* dimensions.y* dimensions.z);
+				auto d_field = thrust::raw_pointer_cast(field.data());
+				thrust::for_each(thrust::counting_iterator<unsigned int>(0), thrust::counting_iterator<unsigned int>(dimensions.x* dimensions.y* dimensions.z),
+					[=] __device__(unsigned int index) {
+					d_field[index] = d_volume[index].tsdfValue;
+
+					//auto zIndex =  index / (dimensions.x * dimensions.y);
+					//auto yIndex = (index % (dimensions.x * dimensions.y)) / dimensions.x;
+					//auto xIndex = (index % (dimensions.x * dimensions.y)) % dimensions.x;
+
+					//if (200 == xIndex && 200 == yIndex && 200 == zIndex)
+					//{
+					//	if (FLT_MAX == d_field[index])
+					//	{
+					//		printf("tsdfValue : %f\n", d_field[index]);
+					//	}
+					//}
+				});
+
+				::MarchingCubes::MarchingCubesSurfaceExtractor<float> mc(
+					d_field,
+					make_float3(volumeMin.x(), volumeMin.y(), volumeMin.z()),
+					make_float3(volumeMax.x(), volumeMax.y(), volumeMax.z()),
+					voxelSize,
+					isoValue);
+
+				auto result = mc.Extract();
+
+				{
+					thrust::host_vector<float> h_field(mc.h_internal->numberOfVoxels);
+					auto t_field = thrust::raw_pointer_cast(h_field.data());
+					cudaMemcpy(t_field, mc.h_internal->data, sizeof(float) * mc.h_internal->numberOfVoxels, cudaMemcpyDeviceToHost);
+					cudaDeviceSynchronize();
+
+					for (size_t i = 0; i < h_field.size(); i++)
+					{
+						auto zIndex = i / (dimensions.x * dimensions.y);
+						auto yIndex = (i % (dimensions.x * dimensions.y)) / dimensions.x;
+						auto xIndex = (i % (dimensions.x * dimensions.y)) % dimensions.x;
+
+						if (FLT_MAX != h_field[i])
+						{
+							auto position = GetPosition({ 0.0f, 0.0f, 0.0f }, dimensions, voxelSize, make_uint3(xIndex, yIndex, zIndex));
+							VD::AddCube("occupied", position, { 0.05f, 0.05f, 0.05f }, { 0.0f, 0.0f, 1.0f }, Color4::White);
+						}
+					}
+				}
+
+				PLYFormat ply;
+
+				for (size_t i = 0; i < result.numberOfVertices; i++)
+				{
+					auto v = result.vertices[i];
+					ply.AddPoint(v.x, v.y, v.z);
+				}
+
+				for (size_t i = 0; i < result.numberOfTriangles; i++)
+				{
+					auto t = result.triangles[i];
+					ply.AddIndex(t.x);
+					ply.AddIndex(t.y);
+					ply.AddIndex(t.z);
+				}
+
+				ply.Serialize("C:\\Resources\\Debug\\Field.ply");
+
+				for (size_t i = 0; i < result.numberOfTriangles; i++)
+				{
+					auto i0 = result.triangles[i].x;
+					auto i1 = result.triangles[i].y;
+					auto i2 = result.triangles[i].z;
+
+					auto v0 = result.vertices[i0];
+					auto v1 = result.vertices[i1];
+					auto v2 = result.vertices[i2];
+
+					VD::AddTriangle("Marching Cubes", { v0.x, v0.y, v0.z }, { v1.x, v1.y, v1.z }, { v2.x, v2.y, v2.z }, Color4::White);
+				}
+
+				delete result.vertices;
+				delete result.triangles;
+			}
+		}
+
 		void TestMarchingCubes()
 		{
+			//TestMarchingCubes_PointCloud();
+
 			//TestMarchingCubes_Patches();
 			//TestMarchingCubes_HPP();
 
-			TestMarchingCubes_Fuse();
+			//TestMarchingCubes_Fuse();
+
+			TestMarchingCubes_One();
 		}
 	}
 }

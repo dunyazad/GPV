@@ -78,18 +78,19 @@ set(source_list
     src/App/CustomTrackballStyle.h
     src/App/CustomTrackballStyle.cpp
     src/App/Serialization.hpp
-    src/App/AppStartCallback.h
-    src/App/AppStartCallback.cpp
-    src/App/AppStartCallback_Capture.cpp
-    src/App/AppStartCallback_HashMap.cpp
-    src/App/AppStartCallback_Integrate.cpp
-    src/App/AppStartCallback_MC.cpp
-    src/App/AppStartCallback_Octree.cpp
-    src/App/AppStartCallback_PSR.cpp
-    src/App/AppStartCallback_RegularGrid.cpp
-    src/App/AppStartCallback_SaveTRN.cpp
-    src/App/AppStartCallback_Simple.cpp
-    src/App/AppStartCallback_SVO.cpp
+    src/App/AppStartCallback/AppStartCallback.h
+    src/App/AppStartCallback/AppStartCallback.cpp
+    src/App/AppStartCallback/AppStartCallback_Capture.cpp
+    src/App/AppStartCallback/AppStartCallback_HashMap.cpp
+    src/App/AppStartCallback/AppStartCallback_Integrate.cpp
+    src/App/AppStartCallback/AppStartCallback_MC.cpp
+    src/App/AppStartCallback/AppStartCallback_Octree.cpp
+    src/App/AppStartCallback/AppStartCallback_Patches.cpp
+    src/App/AppStartCallback/AppStartCallback_PSR.cpp
+    src/App/AppStartCallback/AppStartCallback_RegularGrid.cpp
+    src/App/AppStartCallback/AppStartCallback_SaveTRN.cpp
+    src/App/AppStartCallback/AppStartCallback_Simple.cpp
+    src/App/AppStartCallback/AppStartCallback_SVO.cpp
     src/App/USBHandler.h
     src/App/USBHandler.cpp
     src/App/Utility.h

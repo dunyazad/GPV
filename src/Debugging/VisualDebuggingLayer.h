@@ -6,6 +6,31 @@
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
 
+class VisualDebugging;
+
+class VisualDebuggingLayerElement
+{
+public:
+	VisualDebuggingLayerElement(vtkSmartPointer<vtkRenderer> renderer);
+	virtual ~VisualDebuggingLayerElement();
+
+	vtkSmartPointer<vtkPolyData> polyData;
+	vtkSmartPointer<vtkPolyDataMapper> polyDataMapper;
+	vtkSmartPointer<vtkActor> actor;
+
+	vtkSmartPointer<vtkRenderer> renderer;
+};
+
+class VisualDebuggingLayerElementGlyph : public VisualDebuggingLayerElement
+{
+public:
+	VisualDebuggingLayerElementGlyph(vtkSmartPointer<vtkRenderer> renderer);
+	virtual ~VisualDebuggingLayerElementGlyph();
+
+	vtkSmartPointer<vtkGlyph3D> glyph;
+	vtkSmartPointer<vtkGlyph3DMapper> glyphMapper;
+};
+
 class VisualDebuggingLayer
 {
 public:
@@ -31,7 +56,7 @@ public:
 
 	void AddArrow(const Eigen::Vector3f& center, const Eigen::Vector3f& normal, float scale, const Color4& color);
 
-	void AddWiredBox(const Eigen::Vector3f& boxMin, const Eigen::Vector3f& boxMax, const Color4& color);
+	void AddGrid(const Eigen::Vector3f& position, const Eigen::Vector3f& normal, float width, float height, float interval, const Color4& color);
 
 	void Update();
 	void Clear();
@@ -41,54 +66,10 @@ public:
 	void SetRepresentationAll(Representation representation);
 	void ToggleAllRepresentation();
 
-	void ShowPoints(bool show);
-	void TogglePoints();
-	void SetRepresentationPoints(Representation representation);
-	void TogglePointsRepresentation();
-	
-	void ShowLines(bool show);
-	void ToggleLines();
-	void SetRepresentationLines(Representation representation);
-	void ToggleLinesRepresentation();
-	
-	void ShowTriangles(bool show);
-	void ToggleTriangles();
-	void SetRepresentationTriangles(Representation representation);
-	void ToggleTrianglesRepresentation();
-	
-	void ShowSpheres(bool show);
-	void ToggleSpheres();
-	void SetRepresentationSpheres(Representation representation);
-	void ToggleSpheresRepresentation();
-	
-	void ShowCubes(bool show);
-	void ToggleCubes();
-	void SetRepresentationCubes(Representation representation);
-	void ToggleCubesRepresentation();
-	
-	void ShowArrows(bool show);
-	void ToggleArrows();
-	void SetRepresentationArrows(Representation representation);
-	void ToggleArrowsRepresentation();
-
-	void ShowWiredBoxes(bool show);
-	void ToggleWiredBoxes();
-	void SetRepresentationWiredBoxes(Representation representation);
-	void ToggleWiredBoxesRepresentation();
-
 	float GetPointSize();
 	void SetPointSize(float size);
 	float GetLineWidth();
 	void SetLineWidth(float width);
-
-	inline vtkSmartPointer<vtkActor> GetPointActor() { return pointActor; }
-	inline vtkSmartPointer<vtkActor> GetLineActor() { return lineActor; }
-	inline vtkSmartPointer<vtkActor> GetTriangleActor() { return triangleActor; }
-	inline vtkSmartPointer<vtkActor> GetSphereActor() { return sphereActor; }
-	inline vtkSmartPointer<vtkActor> GetCubeActor() { return cubeActor; }
-	inline vtkSmartPointer<vtkActor> GetGlyphActor() { return glyphActor; }
-	inline vtkSmartPointer<vtkActor> GetArrowActor() { return arrowActor; }
-	inline vtkSmartPointer<vtkActor> GetWiredBoxActor() { return wiredBoxActor; }
 
 protected:
 	inline void ShowActor(vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> actor, bool show)
@@ -138,39 +119,45 @@ private:
 	vtkSmartPointer<vtkRenderer> renderer;
 	vtkSmartPointer<vtkRenderWindow> renderWindow;
 
-	vtkSmartPointer<vtkActor> pointActor;
-	vtkSmartPointer<vtkPolyDataMapper> pointPolyDataMapper;
-	vtkSmartPointer<vtkPolyData> pointPolyData;
+	map<string, VisualDebuggingLayerElement*> elements;
 
-	vtkSmartPointer<vtkActor> lineActor;
-	vtkSmartPointer<vtkPolyDataMapper> linePolyDataMapper;
-	vtkSmartPointer<vtkPolyData> linePolyData;
+	//vtkSmartPointer<vtkActor> pointActor;
+	//vtkSmartPointer<vtkPolyDataMapper> pointPolyDataMapper;
+	//vtkSmartPointer<vtkPolyData> pointPolyData;
 
-	vtkSmartPointer<vtkActor> triangleActor;
-	vtkSmartPointer<vtkPolyDataMapper> trianglePolyDataMapper;
-	vtkSmartPointer<vtkPolyData> trianglePolyData;
+	//vtkSmartPointer<vtkActor> lineActor;
+	//vtkSmartPointer<vtkPolyDataMapper> linePolyDataMapper;
+	//vtkSmartPointer<vtkPolyData> linePolyData;
 
-	vtkSmartPointer<vtkActor> sphereActor;
-	vtkSmartPointer<vtkGlyph3DMapper> spherePolyDataMapper;
-	vtkSmartPointer<vtkPolyData> spherePolyData;
+	//vtkSmartPointer<vtkActor> triangleActor;
+	//vtkSmartPointer<vtkPolyDataMapper> trianglePolyDataMapper;
+	//vtkSmartPointer<vtkPolyData> trianglePolyData;
 
-	vtkSmartPointer<vtkActor> cubeActor;
-	vtkSmartPointer<vtkGlyph3DMapper> cubePolyDataMapper;
-	vtkSmartPointer<vtkPolyData> cubePolyData;
+	//vtkSmartPointer<vtkActor> sphereActor;
+	//vtkSmartPointer<vtkGlyph3DMapper> spherePolyDataMapper;
+	//vtkSmartPointer<vtkPolyData> spherePolyData;
 
-	vtkSmartPointer<vtkActor> glyphActor;
-	vtkSmartPointer<vtkGlyph3DMapper> glyphPolyDataMapper;
-	vtkSmartPointer<vtkPolyData> glyphPolyData;
+	//vtkSmartPointer<vtkActor> cubeActor;
+	//vtkSmartPointer<vtkGlyph3DMapper> cubePolyDataMapper;
+	//vtkSmartPointer<vtkPolyData> cubePolyData;
 
-	vtkSmartPointer<vtkActor> arrowActor;
-	vtkSmartPointer<vtkPolyDataMapper> arrowPolyDataMapper;
-	vtkSmartPointer<vtkGlyph3D> arrowGlyph3D;
-	vtkSmartPointer<vtkPolyData> arrowPolyData;
+	//vtkSmartPointer<vtkActor> glyphActor;
+	//vtkSmartPointer<vtkGlyph3DMapper> glyphPolyDataMapper;
+	//vtkSmartPointer<vtkPolyData> glyphPolyData;
 
-	vtkSmartPointer<vtkActor> wiredBoxActor;
-	vtkSmartPointer<vtkPolyDataMapper> wiredBoxPolyDataMapper;
-	vtkSmartPointer<vtkGlyph3D> wiredBoxGlyph3D;
-	vtkSmartPointer<vtkPolyData> wiredBoxPolyData;
+	//vtkSmartPointer<vtkActor> arrowActor;
+	//vtkSmartPointer<vtkPolyDataMapper> arrowPolyDataMapper;
+	//vtkSmartPointer<vtkGlyph3D> arrowGlyph3D;
+	//vtkSmartPointer<vtkPolyData> arrowPolyData;
+
+	//vtkSmartPointer<vtkActor> wiredBoxActor;
+	//vtkSmartPointer<vtkPolyDataMapper> wiredBoxPolyDataMapper;
+	//vtkSmartPointer<vtkGlyph3D> wiredBoxGlyph3D;
+	//vtkSmartPointer<vtkPolyData> wiredBoxPolyData;
+
+	//vtkSmartPointer<vtkActor> gridActor;
+	//vtkSmartPointer<vtkPolyDataMapper> gridPolyDataMapper;
+	//vtkSmartPointer<vtkPolyData> gridPolyData;
 
 	void DrawPoints();
 	void DrawLines();
@@ -179,7 +166,7 @@ private:
 	void DrawCubes();
 	void DrawGlyphs();
 	void DrawArrows();
-	void DrawWiredBoxes();
+	void DrawGrids();
 
 	vector<std::tuple<Eigen::Vector3f, Color4>> pointInfosToDraw;
 	vector<std::tuple<Eigen::Vector3f, Eigen::Vector3f, Color4>> lineInfosToDraw;
@@ -188,5 +175,8 @@ private:
 	vector<std::tuple<Eigen::Vector3f, Eigen::Vector3f, Eigen::Vector3f, Color4>> cubeInfosToDraw;
 	vector<std::tuple<Eigen::Vector3f, Eigen::Vector3f, Eigen::Vector3f, Color4>> glyphInfosToDraw;
 	vector<std::tuple<Eigen::Vector3f, Eigen::Vector3f, float, Color4>> arrowInfosToDraw;
-	vector<std::tuple<Eigen::Vector3f, Eigen::Vector3f, Color4>> wiredBoxInfosToDraw;
+	vector<std::tuple<Eigen::Vector3f, Eigen::Vector3f, float, float, float, Color4>> gridInfosToDraw;
+
+public:
+	friend class VisualDebugging;
 };

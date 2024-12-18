@@ -60,6 +60,7 @@ void AppStartCallback_HashMap(App* pApp);
 void AppStartCallback_Integrate(App* pApp);
 void AppStartCallback_MarchingCubes(App* pApp);
 void AppStartCallback_Octree(App* pApp);
+void AppStartCallback_Patches(App* pApp);
 void AppStartCallback_PSR(App* pApp);
 void AppStartCallback_RegularGrid(App* pApp);
 void AppStartCallback_Simple(App* pApp);
