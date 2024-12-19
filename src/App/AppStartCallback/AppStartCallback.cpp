@@ -404,9 +404,10 @@ bool AppStartCallback(App* pApp)
 	//AppStartCallback_HashMap(pApp);
 	//AppStartCallback_PSR(pApp);
 	
-	//AppStartCallback_MarchingCubes(pApp);
+	AppStartCallback_MarchingCubes(pApp);
 
-	AppStartCallback_Patches(pApp);
+	//AppStartCallback_Patches(pApp);
+	//AppStartCallback_HalfEdges(pApp);
 
 	return true;
 }

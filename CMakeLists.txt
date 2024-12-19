@@ -48,6 +48,8 @@ set(cuda_source_list
     src/CUDA/CUDA_Common.cuh
     src/CUDA/CUDA.cuh
     src/CUDA/CUDA.cu
+    src/CUDA/HalfEdge.cuh
+    src/CUDA/HalfEdge.cu
     src/CUDA/HashMap.cuh
     src/CUDA/HashMap.cu
     src/CUDA/KDTree.cuh
@@ -83,6 +85,7 @@ set(source_list
     src/App/AppStartCallback/AppStartCallback.h
     src/App/AppStartCallback/AppStartCallback.cpp
     src/App/AppStartCallback/AppStartCallback_Capture.cpp
+    src/App/AppStartCallback/AppStartCallback_HalfEdges.cpp
     src/App/AppStartCallback/AppStartCallback_HashMap.cpp
     src/App/AppStartCallback/AppStartCallback_Integrate.cpp
     src/App/AppStartCallback/AppStartCallback_KDTree.cpp

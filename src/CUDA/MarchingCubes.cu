@@ -386,7 +386,7 @@ namespace CUDA
 			float truncationDistance = 0.5f;
 			float isoValue = 0.0f;
 			int voxelNeighborRange = (int)ceilf(truncationDistance / voxelSize);
-			//voxelNeighborRange = 1;
+			voxelNeighborRange = 1;
 
 			uint3 dimensions;
 			dimensions.x = (uint32_t)ceilf(diff.x() / voxelSize);
@@ -878,15 +878,15 @@ namespace CUDA
 						uint3 index = GetIndex(volumeCenter, dimensions, voxelSize, point);
 						if (index.x == UINT_MAX || index.y == UINT_MAX || index.z == UINT_MAX) return;
 
-						for (int nz = index.z - voxelNeighborRange; nz < index.z + voxelNeighborRange; nz++)
+						for (int nz = index.z - voxelNeighborRange; nz <= index.z + voxelNeighborRange; nz++)
 						{
 							if (dimensions.z <= nz) continue;
 
-							for (int ny = index.y - voxelNeighborRange; ny < index.y + voxelNeighborRange; ny++)
+							for (int ny = index.y - voxelNeighborRange; ny <= index.y + voxelNeighborRange; ny++)
 							{
 								if (dimensions.y <= ny) continue;
 
-								for (int nx = index.x - voxelNeighborRange; nx < index.x + voxelNeighborRange; nx++)
+								for (int nx = index.x - voxelNeighborRange; nx <= index.x + voxelNeighborRange; nx++)
 								{
 									if (dimensions.x <= nx) continue;
 
@@ -1039,11 +1039,11 @@ namespace CUDA
 			Eigen::Vector3f volumeMax(20.0f, 20.0f, 20.0f);
 			Eigen::Vector3f diff = volumeMax - volumeMin;
 			Eigen::Vector3f volumeCenter = (volumeMax + volumeMin) * 0.5f;
-			float voxelSize = 0.2f;
+			float voxelSize = 0.1f;
 			float truncationDistance = 0.5f;
 			float isoValue = 0.0f;
 			int voxelNeighborRange = (int)ceilf(truncationDistance / voxelSize);
-			//voxelNeighborRange = 1;
+			voxelNeighborRange = 1;
 
 			uint3 dimensions;
 			dimensions.x = (uint32_t)ceilf(diff.x() / voxelSize);
@@ -1082,15 +1082,15 @@ namespace CUDA
 					uint3 index = GetIndex(volumeCenter, dimensions, voxelSize, point);
 					if (index.x == UINT_MAX || index.y == UINT_MAX || index.z == UINT_MAX) return;
 
-					for (int nz = index.z - voxelNeighborRange; nz < index.z + voxelNeighborRange; nz++)
+					for (int nz = index.z - voxelNeighborRange; nz <= index.z + voxelNeighborRange; nz++)
 					{
 						if (dimensions.z <= nz) continue;
 
-						for (int ny = index.y - voxelNeighborRange; ny < index.y + voxelNeighborRange; ny++)
+						for (int ny = index.y - voxelNeighborRange; ny <= index.y + voxelNeighborRange; ny++)
 						{
 							if (dimensions.y <= ny) continue;
 
-							for (int nx = index.x - voxelNeighborRange; nx < index.x + voxelNeighborRange; nx++)
+							for (int nx = index.x - voxelNeighborRange; nx <= index.x + voxelNeighborRange; nx++)
 							{
 								if (dimensions.x <= nx) continue;
 

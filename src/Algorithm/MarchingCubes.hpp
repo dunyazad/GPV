@@ -1,6 +1,6 @@
 #pragma once
 
-//#define USE_CUDA
+#define USE_CUDA
 
 #include <stdio.h>
 #include <math.h>
@@ -11,6 +11,11 @@
 #include <cuda_runtime.h>
 #include <vector_types.h>
 #include <nvtx3/nvToolsExt.h>
+#else
+#define __host__
+#define __device__
+#define __global__
+#define __constant__
 #endif
 
 #ifndef __VECTOR_TYPES_H__

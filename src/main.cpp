@@ -38,11 +38,18 @@ int main()
 }
 
 
-//#define USE_CUDA
+
+
+
+
+
+
 //
-//#ifdef USE_CUDA
-//#include <CUDA/CUDA_Test.cuh>
-//#endif
+////#define USE_CUDA
+////
+////#ifdef USE_CUDA
+////#include <CUDA/CUDA_Test.cuh>
+////#endif
 //
 //#include <Algorithm/MarchingCubes.hpp>
 //using namespace MarchingCubes;
@@ -64,7 +71,7 @@ int main()
 //void Device_Test()
 //{
 //#ifdef USE_CUDA
-//	CUDA_Test();
+////	CUDA_Test();
 //#endif
 //}
 //

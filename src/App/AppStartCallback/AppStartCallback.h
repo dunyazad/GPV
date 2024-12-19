@@ -5,6 +5,7 @@
 #include <App/AppEventHandlers.h>
 
 #include <CUDA/CUDA.cuh>
+#include <CUDA/HalfEdge.cuh>
 #include <CUDA/HashMap.cuh>
 #include <CUDA/MarchingCubes.cuh>
 #include <CUDA/Octree.cuh>
@@ -56,6 +57,7 @@ void LoadDepthImage();
 bool AppStartCallback(App* pApp);
 void AppStartCallback_Capture(App* pApp);
 void AppStartCallback_SaveTRN(App* pApp);
+void AppStartCallback_HalfEdges(App* pApp);
 void AppStartCallback_HashMap(App* pApp);
 void AppStartCallback_Integrate(App* pApp);
 void AppStartCallback_KDTree(App* pApp);
