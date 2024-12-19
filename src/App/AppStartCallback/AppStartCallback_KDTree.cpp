@@ -3,7 +3,7 @@
 #include <Debugging/VisualDebugging.h>
 using VD = VisualDebugging;
 
-void AppStartCallback_Patches(App* pApp)
+void AppStartCallback_KDTree(App* pApp)
 {
 	auto renderer = pApp->GetRenderer();
 	auto t = Time::Now();

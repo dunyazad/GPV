@@ -79,3 +79,54 @@ void MaximizeVTKWindowOnMonitor(vtkSmartPointer<vtkRenderWindow> renderWindow, i
     }
 }
 #endif
+
+Eigen::Matrix3f computeRotationMatrix(const Eigen::Vector3f& a, const Eigen::Vector3f& b) {
+    // Normalize input vectors
+    Eigen::Vector3f a_normalized = a.normalized();
+    Eigen::Vector3f b_normalized = b.normalized();
+
+    // Compute the cross product and sine of the angle
+    Eigen::Vector3f axis = a_normalized.cross(b_normalized);
+    double sin_angle = axis.norm();
+    double cos_angle = a_normalized.dot(b_normalized);
+
+    // Special case: vectors are parallel
+    if (sin_angle < 1e-8) {
+        if (cos_angle > 0) {
+            // Vectors are aligned
+            return Eigen::Matrix3f::Identity();
+        }
+        else {
+            // Vectors are opposite; find a perpendicular vector
+            Eigen::Vector3f perp;
+            if (std::abs(a_normalized.x()) < std::abs(a_normalized.y()) &&
+                std::abs(a_normalized.x()) < std::abs(a_normalized.z())) {
+                perp = Eigen::Vector3f(1, 0, 0);
+            }
+            else if (std::abs(a_normalized.y()) < std::abs(a_normalized.z())) {
+                perp = Eigen::Vector3f(0, 1, 0);
+            }
+            else {
+                perp = Eigen::Vector3f(0, 0, 1);
+            }
+            axis = a_normalized.cross(perp).normalized();
+            return Eigen::AngleAxisf(M_PI, axis).toRotationMatrix();
+        }
+    }
+
+    // Normalize the rotation axis
+    axis.normalize();
+
+    // Construct the skew-symmetric matrix for the cross product
+    Eigen::Matrix3f K;
+    K << 0, -axis.z(), axis.y(),
+        axis.z(), 0, -axis.x(),
+        -axis.y(), axis.x(), 0;
+
+    // Rodrigues' rotation formula
+    Eigen::Matrix3f rotationMatrix = Eigen::Matrix3f::Identity() +
+        sin_angle * K +
+        (1 - cos_angle) * K * K;
+
+    return rotationMatrix;
+}

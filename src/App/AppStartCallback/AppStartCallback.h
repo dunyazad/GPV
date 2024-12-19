@@ -58,6 +58,7 @@ void AppStartCallback_Capture(App* pApp);
 void AppStartCallback_SaveTRN(App* pApp);
 void AppStartCallback_HashMap(App* pApp);
 void AppStartCallback_Integrate(App* pApp);
+void AppStartCallback_KDTree(App* pApp);
 void AppStartCallback_MarchingCubes(App* pApp);
 void AppStartCallback_Octree(App* pApp);
 void AppStartCallback_Patches(App* pApp);

@@ -472,3 +472,16 @@ void VisualDebugging::AddArrow(const string& layerName, const Eigen::Vector3f& c
 
 	s_needToRender = true;
 }
+
+void VisualDebugging::AddGrid(const string& layerName, const Eigen::Vector3f& position, const Eigen::Vector3f& normal, float width, float height, float interval, const Color4& color)
+{
+	auto layer = GetLayer(layerName);
+	if (nullptr == layer)
+	{
+		layer = CreateLayer(layerName);
+	}
+
+	layer->AddGrid(position, normal, width, height, interval, color);
+
+	s_needToRender = true;
+}

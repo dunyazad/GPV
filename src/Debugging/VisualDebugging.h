@@ -35,7 +35,7 @@ public:
 
 	static void AddArrow(const string& layerName, const Eigen::Vector3f& center, const Eigen::Vector3f& normal, float scale, const Color4& color);
 
-	static void AddWiredBox(const string& layerName, const Eigen::Vector3f& boxMin, const Eigen::Vector3f& boxMax, const Color4& color);
+	static void AddGrid(const string& layerName, const Eigen::Vector3f& position, const Eigen::Vector3f& normal, float width, float height, float interval, const Color4& color);
 
 	static void Update();
 	static void ClearAll();

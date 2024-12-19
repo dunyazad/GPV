@@ -19,3 +19,5 @@ BOOL CALLBACK MonitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMoni
 void MaximizeConsoleWindowOnMonitor(int monitorIndex);
 void MaximizeVTKWindowOnMonitor(vtkSmartPointer<vtkRenderWindow> renderWindow, int monitorIndex);
 #endif
+
+Eigen::Matrix3f computeRotationMatrix(const Eigen::Vector3f& a, const Eigen::Vector3f& b);

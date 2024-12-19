@@ -50,6 +50,8 @@ set(cuda_source_list
     src/CUDA/CUDA.cu
     src/CUDA/HashMap.cuh
     src/CUDA/HashMap.cu
+    src/CUDA/KDTree.cuh
+    src/CUDA/KDTree.cu
     src/CUDA/MarchingCubes.cuh
     src/CUDA/MarchingCubes.cu
     src/CUDA/Octree.cuh
@@ -83,6 +85,7 @@ set(source_list
     src/App/AppStartCallback/AppStartCallback_Capture.cpp
     src/App/AppStartCallback/AppStartCallback_HashMap.cpp
     src/App/AppStartCallback/AppStartCallback_Integrate.cpp
+    src/App/AppStartCallback/AppStartCallback_KDTree.cpp
     src/App/AppStartCallback/AppStartCallback_MC.cpp
     src/App/AppStartCallback/AppStartCallback_Octree.cpp
     src/App/AppStartCallback/AppStartCallback_Patches.cpp

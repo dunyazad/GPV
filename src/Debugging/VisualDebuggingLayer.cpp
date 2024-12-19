@@ -3,6 +3,8 @@
 
 #include <Algorithm/CustomPolyDataFilter.h>
 
+#include <App/Utility.h>
+
 VisualDebuggingLayerElement::VisualDebuggingLayerElement(vtkSmartPointer<vtkRenderer> renderer)
 	: renderer(renderer)
 {
@@ -673,15 +675,56 @@ void VisualDebuggingLayer::DrawGrids()
 		auto interval = std::get<4>(gridInfo);
 		auto color = std::get<5>(gridInfo);
 
-		//auto pi0 = points->InsertNextPoint(p0.data());
-		//auto pi1 = points->InsertNextPoint(p1.data());
+		float xmin = -width * 0.5f;
+		float ymin = -height * 0.5f;
+		float zmin = 0.0f;
 
-		//vtkIdType pids[] = { pi0, pi1 };
+		float xmax = width * 0.5f;
+		float ymax = height * 0.5f;
+		float zmax = 0.0f;
 
-		//grids->InsertNextCell(2, pids);
+		int xCount = (int)ceilf(width / interval);
+		int yCount = (int)ceilf(height / interval);
 
-		colors->InsertNextTypedTuple(color.data());
-		colors->InsertNextTypedTuple(color.data());
+		auto rotationMatrix = computeRotationMatrix({ 0.0f, 0.0f, 1.0f }, n);
+
+		for (size_t i = 0; i < yCount; i++)
+		{
+			auto p0 = Eigen::Vector3f(xmin, ymin + (float)i * interval, 0.0f);
+			auto p1 = Eigen::Vector3f(xmax, ymin + (float)i * interval, 0.0f);
+
+			Eigen::Vector3f tp0 = rotationMatrix * p0 + p;
+			Eigen::Vector3f tp1 = rotationMatrix * p1 + p;
+
+			auto pi0 = points->InsertNextPoint(tp0.data());
+			auto pi1 = points->InsertNextPoint(tp1.data());
+
+			vtkIdType pids[] = { pi0, pi1 };
+
+			grids->InsertNextCell(2, pids);
+
+			colors->InsertNextTypedTuple(color.data());
+			colors->InsertNextTypedTuple(color.data());
+		}
+
+		for (size_t i = 0; i < xCount; i++)
+		{
+			auto p0 = Eigen::Vector3f(xmin + (float)i * interval, ymin, 0.0f);
+			auto p1 = Eigen::Vector3f(xmin + (float)i * interval, ymax, 0.0f);
+
+			Eigen::Vector3f tp0 = rotationMatrix * p0 + p;
+			Eigen::Vector3f tp1 = rotationMatrix * p1 + p;
+
+			auto pi0 = points->InsertNextPoint(tp0.data());
+			auto pi1 = points->InsertNextPoint(tp1.data());
+
+			vtkIdType pids[] = { pi0, pi1 };
+
+			grids->InsertNextCell(2, pids);
+
+			colors->InsertNextTypedTuple(color.data());
+			colors->InsertNextTypedTuple(color.data());
+		}
 	}
 
 	vtkSmartPointer<vtkPolyData> newgridPolyData =
