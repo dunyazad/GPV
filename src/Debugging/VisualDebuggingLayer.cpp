@@ -688,7 +688,7 @@ void VisualDebuggingLayer::DrawGrids()
 
 		auto rotationMatrix = computeRotationMatrix({ 0.0f, 0.0f, 1.0f }, n);
 
-		for (size_t i = 0; i < yCount; i++)
+		for (size_t i = 0; i <= yCount; i++)
 		{
 			auto p0 = Eigen::Vector3f(xmin, ymin + (float)i * interval, 0.0f);
 			auto p1 = Eigen::Vector3f(xmax, ymin + (float)i * interval, 0.0f);
@@ -707,7 +707,7 @@ void VisualDebuggingLayer::DrawGrids()
 			colors->InsertNextTypedTuple(color.data());
 		}
 
-		for (size_t i = 0; i < xCount; i++)
+		for (size_t i = 0; i <= xCount; i++)
 		{
 			auto p0 = Eigen::Vector3f(xmin + (float)i * interval, ymin, 0.0f);
 			auto p1 = Eigen::Vector3f(xmin + (float)i * interval, ymax, 0.0f);

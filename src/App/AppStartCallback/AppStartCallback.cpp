@@ -392,7 +392,7 @@ bool AppStartCallback(App* pApp)
 	//AppStartCallback_Integrate(pApp);
 	//AppStartCallback_Convert(pApp);
 	//AppStartCallback_LoadPNT(pApp);
-	AppStartCallback_KDTree(pApp);
+	//AppStartCallback_KDTree(pApp);
 	//AppStartCallback_Octree(pApp);
 	//AppStartCallback_Poisson(pApp);
 	//AppStartCallback_NanoVDB(pApp);
@@ -406,7 +406,7 @@ bool AppStartCallback(App* pApp)
 	
 	//AppStartCallback_MarchingCubes(pApp);
 
-	//AppStartCallback_Patches(pApp);
+	AppStartCallback_Patches(pApp);
 
 	return true;
 }
