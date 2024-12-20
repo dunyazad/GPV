@@ -18,6 +18,9 @@
 #define __constant__
 #endif
 
+#define FLT_VALID(x) ((x) < 3.402823466e+36F)
+#define FLT_NOT_VALID(x) ((x) > 3.402823466e+36F)
+
 #ifndef __VECTOR_TYPES_H__
 struct uint3
 {
@@ -711,20 +714,16 @@ namespace MarchingCubes
 				continue;
 			}
 
-			if (cornerFlatIndex < internal->numberOfVoxels) {
+			if (cornerFlatIndex < internal->numberOfVoxels)
+			{
 				tsdf[i] = internal->data[cornerFlatIndex];
-
-				if (200 == cornerIndex.x && 200 == cornerIndex.y && 200 == cornerIndex.z)
-				{
-					printf("======================== %f\n", tsdf[i]);
-				}
 			}
 			else {
 				tsdf[i] = FLT_MAX;
 			}
 		}
 
-		if (FLT_MAX != tsdf[0] && FLT_MAX != tsdf[1])
+		if (FLT_VALID(tsdf[0]) && FLT_VALID(tsdf[1]))
 		{
 			float alpha = 0.5f;
 			float diff = tsdf[0] - tsdf[1];
@@ -745,7 +744,7 @@ namespace MarchingCubes
 			}
 		}
 
-		if (FLT_MAX != tsdf[0] && FLT_MAX != tsdf[4])
+		if (FLT_VALID(tsdf[0]) && FLT_VALID(tsdf[4]))
 		{
 			float alpha = 0.5f;
 			float diff = tsdf[0] - tsdf[4];
@@ -766,7 +765,7 @@ namespace MarchingCubes
 			}
 		}
 
-		if (FLT_MAX != tsdf[0] && FLT_MAX != tsdf[3])
+		if (FLT_VALID(tsdf[0]) && FLT_VALID(tsdf[3]))
 		{
 			float alpha = 0.5f;
 			float diff = tsdf[0] - tsdf[3];
@@ -845,7 +844,7 @@ namespace MarchingCubes
 
 		int cubeIndex = 0;
 		for (int i = 0; i < 8; ++i) {
-			if (tsdf[i] != FLT_MAX &&
+			if (FLT_VALID(tsdf[i]) &&
 				//(-truncationDistance <= tsdf[i] || tsdf[i] <= truncationDistance) &&
 				tsdf[i] < internal->isoValue)
 			{

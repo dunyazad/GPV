@@ -1215,6 +1215,107 @@ namespace CUDA
 			}
 		}
 
+		void TestMarchingCubes_vinfo()
+		{
+			auto t = Time::Now();
+
+			stringstream ss;
+			ss << "C:\\Resources\\3D\\PLY\\Complete\\voxels.vinfo";
+
+			Eigen::Vector3f volumeMin(-20.0f, -20.0f, -20.0f);
+			Eigen::Vector3f volumeMax(20.0f, 20.0f, 20.0f);
+			Eigen::Vector3f diff = volumeMax - volumeMin;
+			Eigen::Vector3f volumeCenter = (volumeMax + volumeMin) * 0.5f;
+			float voxelSize = 0.1f;
+			float truncationDistance = 0.5f;
+			float isoValue = 0.0f;
+			int voxelNeighborRange = (int)ceilf(truncationDistance / voxelSize);
+			voxelNeighborRange = 1;
+
+			uint3 dimensions;
+			dimensions.x = (uint32_t)ceilf(diff.x() / voxelSize);
+			dimensions.y = (uint32_t)ceilf(diff.y() / voxelSize);
+			dimensions.z = (uint32_t)ceilf(diff.z() / voxelSize);
+
+			size_t numberOfVoxels = dimensions.x * dimensions.y * dimensions.z;
+
+			thrust::host_vector<float> h_volume(dimensions.x * dimensions.y * dimensions.z);
+			FILE* fp = fopen("C:\\Resources\\3D\\PLY\\Complete\\voxels.vinfo", "rb");
+			fread(h_volume.data(), sizeof(float) * 400 * 400 * 400, 1, fp);
+
+			thrust::device_vector<float> volume(h_volume);
+			auto d_volume = thrust::raw_pointer_cast(volume.data());
+			
+			cudaDeviceSynchronize();
+
+			Time::End(t, "Initialize Volume");
+
+			{
+				::MarchingCubes::MarchingCubesSurfaceExtractor<float> mc(
+					d_volume,
+					make_float3(volumeMin.x(), volumeMin.y(), volumeMin.z()),
+					make_float3(volumeMax.x(), volumeMax.y(), volumeMax.z()),
+					voxelSize,
+					isoValue);
+
+				auto result = mc.Extract();
+
+				{
+					thrust::host_vector<float> h_field(mc.h_internal->numberOfVoxels);
+					auto t_field = thrust::raw_pointer_cast(h_field.data());
+					cudaMemcpy(t_field, mc.h_internal->data, sizeof(float) * mc.h_internal->numberOfVoxels, cudaMemcpyDeviceToHost);
+					cudaDeviceSynchronize();
+
+					for (size_t i = 0; i < h_field.size(); i++)
+					{
+						auto zIndex = i / (dimensions.x * dimensions.y);
+						auto yIndex = (i % (dimensions.x * dimensions.y)) / dimensions.x;
+						auto xIndex = (i % (dimensions.x * dimensions.y)) % dimensions.x;
+
+						if (FLT_MAX != h_field[i])
+						{
+							auto position = GetPosition({ 0.0f, 0.0f, 0.0f }, dimensions, voxelSize, make_uint3(xIndex, yIndex, zIndex));
+							VD::AddCube("occupied", position, { 0.05f, 0.05f, 0.05f }, { 0.0f, 0.0f, 1.0f }, Color4::White);
+						}
+					}
+				}
+
+				PLYFormat ply;
+
+				for (size_t i = 0; i < result.numberOfVertices; i++)
+				{
+					auto v = result.vertices[i];
+					ply.AddPoint(v.x, v.y, v.z);
+				}
+
+				for (size_t i = 0; i < result.numberOfTriangles; i++)
+				{
+					auto t = result.triangles[i];
+					ply.AddIndex(t.x);
+					ply.AddIndex(t.y);
+					ply.AddIndex(t.z);
+				}
+
+				ply.Serialize("C:\\Resources\\Debug\\Field.ply");
+
+				for (size_t i = 0; i < result.numberOfTriangles; i++)
+				{
+					auto i0 = result.triangles[i].x;
+					auto i1 = result.triangles[i].y;
+					auto i2 = result.triangles[i].z;
+
+					auto v0 = result.vertices[i0];
+					auto v1 = result.vertices[i1];
+					auto v2 = result.vertices[i2];
+
+					VD::AddTriangle("Marching Cubes", { v0.x, v0.y, v0.z }, { v1.x, v1.y, v1.z }, { v2.x, v2.y, v2.z }, Color4::White);
+				}
+
+				delete result.vertices;
+				delete result.triangles;
+			}
+		}
+
 		void TestMarchingCubes()
 		{
 			//TestMarchingCubes_PointCloud();
@@ -1224,7 +1325,9 @@ namespace CUDA
 
 			//TestMarchingCubes_Fuse();
 
-			TestMarchingCubes_One();
+			//TestMarchingCubes_One();
+
+			TestMarchingCubes_vinfo();
 		}
 	}
 }

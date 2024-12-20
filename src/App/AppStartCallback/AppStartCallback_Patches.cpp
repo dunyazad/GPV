@@ -16,7 +16,7 @@ void AppStartCallback_Patches(App* pApp)
 		auto& p = patchPoints_0[i];
 		if (FLT_MAX != p.x() && FLT_MAX != p.y() && FLT_MAX != p.z())
 		{
-			VD::AddSphere("points_0", p, 0.05f, Color4::Red);
+			VD::AddSphere("points_0", p, 0.025f, Color4::Red);
 		}
 	}
 
