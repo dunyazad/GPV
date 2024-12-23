@@ -122,83 +122,29 @@ namespace CUDA
 		{
 			auto t = Time::Now();
 
-			size_t hCount = 10;
-			size_t vCount = 10;
-			float interval = 0.1f;
+			PLYFormat ply;
+			ply.Deserialize("C:\\Resources\\Debug\\Field.ply");
 
-			size_t numberOfVertices = hCount * vCount;
-			size_t numberOfTriangles = (hCount - 1) * (vCount - 1) * 2;
-
-			HalfEdgeMesh* d_mesh;
-			cudaMallocManaged(&d_mesh, sizeof(HalfEdgeMesh));
-			InitializeHalfEdgeMesh(d_mesh, numberOfVertices, numberOfTriangles);
-
-			Eigen::Vector3f* points = new Eigen::Vector3f[hCount * vCount];
-			for (size_t y = 0; y < vCount; y++)
+			for (size_t i = 0; i < ply.GetIndices().size() / 3; i++)
 			{
-				for (size_t x = 0; x < hCount; x++)
-				{
-					points[y * hCount + x] = Eigen::Vector3f(
-						(float)x * interval - 5.0f,
-						(float)y * interval - 5.0f,
-						0.0f);
+				auto i0 = ply.GetIndices()[i * 3];
+				auto i1 = ply.GetIndices()[i * 3 + 1];
+				auto i2 = ply.GetIndices()[i * 3 + 2];
 
-					VD::AddSphere("points", points[y * hCount + x], 0.05f, Color4::White);
-				}
+				auto v0x = ply.GetPoints()[i0 * 3];
+				auto v0y = ply.GetPoints()[i0 * 3 + 1];
+				auto v0z = ply.GetPoints()[i0 * 3 + 2];
+
+				auto v1x = ply.GetPoints()[i1 * 3];
+				auto v1y = ply.GetPoints()[i1 * 3 + 1];
+				auto v1z = ply.GetPoints()[i1 * 3 + 2];
+
+				auto v2x = ply.GetPoints()[i2 * 3];
+				auto v2y = ply.GetPoints()[i2 * 3 + 1];
+				auto v2z = ply.GetPoints()[i2 * 3 + 2];
+
+				VD::AddTriangle("mesh", { v0x, v0y, v0z }, { v1x, v1y, v1z }, { v2x, v2y, v2z }, Color4::White);
 			}
-
-			Eigen::Vector3i* triangles = new Eigen::Vector3i[numberOfTriangles];
-			for (size_t y = 0; y < vCount - 1; y++)
-			{
-				for (size_t x = 0; x < hCount - 1; x++)
-				{
-					triangles[y * (hCount - 1) * 2 + x * 2] = Eigen::Vector3i(
-						y * hCount + x,
-						y * hCount + x + 1,
-						(y + 1) * hCount + x + 1);
-					triangles[y * (hCount - 1) * 2 + x * 2 + 1] = Eigen::Vector3i(
-						y * hCount + x,
-						(y + 1) * hCount + x + 1,
-						(y + 1) * hCount + x);
-					
-					Eigen::Vector3i& t0 = triangles[y * (hCount - 1) * 2 + x * 2];
-					Eigen::Vector3i& t1 = triangles[y * (hCount - 1) * 2 + x * 2 + 1];
-					VD::AddTriangle("triangles", points[t0.x()], points[t0.y()], points[t0.z()], Color4::White);
-					VD::AddTriangle("triangles", points[t1.x()], points[t1.y()], points[t1.z()], Color4::White);
-				}
-			}
-
-			//FromMesh(d_mesh, points, numberOfVertices, triangles, numberOfTriangles);
-			
-			
-
-
-			delete[] points;
-			delete[] triangles;
-
-			TerminateHalfEdgeMesh(d_mesh);
-			cudaFree(d_mesh);
-			
-			
-			
-			//LoadPatch(0, renderer);
-			//t = Time::End(t, "Loading Patch");
-
-			//for (size_t i = 0; i < patchPoints_0.size(); i++)
-			//{
-			//	auto& p = patchPoints_0[i];
-			//	if (FLT_MAX != p.x() && FLT_MAX != p.y() && FLT_MAX != p.z())
-			//	{
-			//		VD::AddSphere("points_0", p, 0.05f, Color4::Red);
-			//	}
-			//}
-
-			////VD::AddGrid("grid", { 0.0f, 0.0f, 0.0f }, { 1.0f, 0.0f, 0.0f }, 40.0f, 48.0f, 0.1f, Color4::Red);
-			////VD::AddGrid("grid", { 0.0f, 0.0f, 0.0f }, { 1.0f, 1.0f, 0.0f }, 40.0f, 48.0f, 0.1f, Color4::Yellow);
-			////VD::AddGrid("grid", { 0.0f, 0.0f, 0.0f }, { 0.0f, 1.0f, 0.0f }, 40.0f, 48.0f, 0.1f, Color4::Green);
-			////VD::AddGrid("grid", { 0.0f, 0.0f, 0.0f }, { 0.0f, 1.0f, 1.0f }, 40.0f, 48.0f, 0.1f, Color4::Cyan);
-			//VD::AddGrid("grid", { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 1.0f }, 40.0f, 48.0f, 0.1f, Color4::Blue);
-			////VD::AddGrid("grid", { 0.0f, 0.0f, 0.0f }, { 1.0f, 0.0f, 1.0f }, 40.0f, 48.0f, 0.1f, Color4::Magenta);
 
 			VD::AddLine("axes", { 0, 0, 0 }, { 100.0f, 0.0f, 0.0f }, Color4::Red);
 			VD::AddLine("axes", { 0, 0, 0 }, { 0.0f, 100.0f, 0.0f }, Color4::Green);

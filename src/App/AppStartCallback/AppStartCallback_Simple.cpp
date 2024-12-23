@@ -6,6 +6,16 @@ using VD = VisualDebugging;
 void AppStartCallback_Simple(App* pApp)
 {
 	auto renderer = pApp->GetRenderer();
+
+	VD::AddCube("Cubes", { -1.0f, -1.0f, -1.0f }, Color4::White);
+	VD::AddCube("Cubes", {  1.0f, -1.0f, -1.0f }, Color4::White);
+	VD::AddCube("Cubes", { -1.0f,  1.0f, -1.0f }, Color4::White);
+	VD::AddCube("Cubes", {  1.0f,  1.0f, -1.0f }, Color4::White);
+	VD::AddCube("Cubes", { -1.0f, -1.0f, 1.0f }, Color4::White);
+	VD::AddCube("Cubes", {  1.0f, -1.0f, 1.0f }, Color4::White);
+	VD::AddCube("Cubes", { -1.0f,  1.0f, 1.0f }, Color4::White);
+	VD::AddCube("Cubes", {  1.0f,  1.0f, 1.0f }, Color4::White);
+
 	//LoadModel(renderer, "C:\\Resources\\3D\\PLY\\Complete\\Lower.ply");
 
 	//VisualDebugging::AddLine("axes", { 0, 0, 0 }, { 100.0f, 0.0f, 0.0f }, Color4::Red);

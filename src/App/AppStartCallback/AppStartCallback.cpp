@@ -406,8 +406,8 @@ bool AppStartCallback(App* pApp)
 	
 	//AppStartCallback_MarchingCubes(pApp);
 
-	AppStartCallback_Patches(pApp);
-	//AppStartCallback_HalfEdges(pApp);
+	//AppStartCallback_Patches(pApp);
+	AppStartCallback_HalfEdges(pApp);
 
 	return true;
 }

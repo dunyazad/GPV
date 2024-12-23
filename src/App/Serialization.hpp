@@ -1075,6 +1075,7 @@ public:
 		string line;
 		vector<string> elementNames;
 		vector<size_t> elementCounts;
+		vector<bool> listTypeInfo;
 		vector<vector<string>> elementPropertyTypes;
 		vector<vector<string>> elementPropertyNames;
 
@@ -1108,6 +1109,8 @@ public:
 				{
 					elementPropertyTypes.push_back(vector<string>());
 					elementPropertyNames.push_back(vector<string>());
+				
+					listTypeInfo.push_back(false);
 				}
 				if ("list" != words[1])
 				{
@@ -1120,7 +1123,15 @@ public:
 				}
 				else
 				{
+					if (words[1] == "list")
+					{
+						listTypeInfo[index] = true;
+				
+						elementPropertyTypes[index].push_back(words[2]);
+						elementPropertyTypes[index].push_back(words[3]);
 
+						elementPropertyNames[index].push_back(words[4]);
+					}
 				}
 			}
 			else if (words[0] == "end_header")
@@ -1133,64 +1144,84 @@ public:
 		{
 			float x, y, z, nx, ny, nz;
 			unsigned char red, green, blue, alpha;
-			for (size_t j = 0; j < elementCounts[i]; j++)
+			bool isListype = listTypeInfo[i];
+			if (isListype == false)
 			{
-				getline(buffer, line);
-				auto words = split(line, " \t");
-
-				for (size_t k = 0; k < words.size(); k++)
+				for (size_t j = 0; j < elementCounts[i]; j++)
 				{
-					if (elementPropertyNames[i][k] == "x")
-					{
-						x = atof(words[k].c_str());
-					}
-					else if (elementPropertyNames[i][k] == "y")
-					{
-						y = atof(words[k].c_str());
-					}
-					else if (elementPropertyNames[i][k] == "z")
-					{
-						z = atof(words[k].c_str());
+					getline(buffer, line);
+					auto words = split(line, " \t");
 
-						AddPoint(x, y, z);
-					}
-
-					else if (elementPropertyNames[i][k] == "nx")
+					for (size_t k = 0; k < words.size(); k++)
 					{
-						nx = atof(words[k].c_str());
-					}
-					else if (elementPropertyNames[i][k] == "ny")
-					{
-						ny = atof(words[k].c_str());
-					}
-					else if (elementPropertyNames[i][k] == "nz")
-					{
-						nz = atof(words[k].c_str());
-
-						AddNormal(nx, ny, nz);
-					}
-
-					else if (elementPropertyNames[i][k] == "red")
-					{
-						red = (unsigned char)atoi(words[k].c_str());
-					}
-					else if (elementPropertyNames[i][k] == "green")
-					{
-						green = (unsigned char)atoi(words[k].c_str());
-					}
-					else if (elementPropertyNames[i][k] == "blue")
-					{
-						blue = (unsigned char)atoi(words[k].c_str());
-						if (false == useAlpha)
+						if (elementPropertyNames[i][k] == "x")
 						{
-							AddColor((float)red / 255.0f, (float)green / 255.0f, (float)blue / 255.0f);
+							x = atof(words[k].c_str());
+						}
+						else if (elementPropertyNames[i][k] == "y")
+						{
+							y = atof(words[k].c_str());
+						}
+						else if (elementPropertyNames[i][k] == "z")
+						{
+							z = atof(words[k].c_str());
+
+							AddPoint(x, y, z);
+						}
+
+						else if (elementPropertyNames[i][k] == "nx")
+						{
+							nx = atof(words[k].c_str());
+						}
+						else if (elementPropertyNames[i][k] == "ny")
+						{
+							ny = atof(words[k].c_str());
+						}
+						else if (elementPropertyNames[i][k] == "nz")
+						{
+							nz = atof(words[k].c_str());
+
+							AddNormal(nx, ny, nz);
+						}
+
+						else if (elementPropertyNames[i][k] == "red")
+						{
+							red = (unsigned char)atoi(words[k].c_str());
+						}
+						else if (elementPropertyNames[i][k] == "green")
+						{
+							green = (unsigned char)atoi(words[k].c_str());
+						}
+						else if (elementPropertyNames[i][k] == "blue")
+						{
+							blue = (unsigned char)atoi(words[k].c_str());
+							if (false == useAlpha)
+							{
+								AddColor((float)red / 255.0f, (float)green / 255.0f, (float)blue / 255.0f);
+							}
+						}
+						else if (elementPropertyNames[i][k] == "alpha")
+						{
+							alpha = (unsigned char)atoi(words[k].c_str());
+
+							AddColor((float)red / 255.0f, (float)green / 255.0f, (float)blue / 255.0f, (float)alpha / 255.0f);
 						}
 					}
-					else if (elementPropertyNames[i][k] == "alpha")
-					{
-						alpha = (unsigned char)atoi(words[k].c_str());
+				}
+			}
+			else
+			{
+				for (size_t j = 0; j < elementCounts[i]; j++)
+				{
+					getline(buffer, line);
+					auto words = split(line, " \t");
 
-						AddColor((float)red / 255.0f, (float)green / 255.0f, (float)blue / 255.0f, (float)alpha / 255.0f);
+					auto noi = atoi(words[0].c_str());
+					for (size_t k = 1; k <= noi; k++)
+					{
+						auto vi = atoi(words[k].c_str());
+						
+						AddIndex(vi);
 					}
 				}
 			}
