@@ -125,6 +125,8 @@ namespace CUDA
 			PLYFormat ply;
 			ply.Deserialize("C:\\Resources\\Debug\\Field.ply");
 
+			map<pair<unsigned int, unsigned int>, int> edges;
+
 			for (size_t i = 0; i < ply.GetIndices().size() / 3; i++)
 			{
 				auto i0 = ply.GetIndices()[i * 3];
@@ -144,12 +146,32 @@ namespace CUDA
 				auto v2z = ply.GetPoints()[i2 * 3 + 2];
 
 				VD::AddTriangle("mesh", { v0x, v0y, v0z }, { v1x, v1y, v1z }, { v2x, v2y, v2z }, Color4::White);
+
+				edges[i0 < i1 ? make_pair(i0, i1) : make_pair(i1, i0)]++;
+				edges[i1 < i2 ? make_pair(i1, i2) : make_pair(i2, i1)]++;
+				edges[i2 < i0 ? make_pair(i2, i0) : make_pair(i0, i2)]++;
 			}
 
 			VD::AddLine("axes", { 0, 0, 0 }, { 100.0f, 0.0f, 0.0f }, Color4::Red);
 			VD::AddLine("axes", { 0, 0, 0 }, { 0.0f, 100.0f, 0.0f }, Color4::Green);
 			VD::AddLine("axes", { 0, 0, 0 }, { 0.0f, 0.0f, 100.0f }, Color4::Blue);
 			t = Time::End(t, "Visualize");
+
+			int to = 0;
+			int tc = 0;
+			int minp = INT_MAX;
+			int maxp = -INT_MAX;
+			for (auto& kvp : edges)
+			{
+				auto v = kvp.second;
+				if (minp > v) minp = v;
+				if (maxp < v) maxp = v;
+
+				if (v == 1) to++;
+				if (v == 2) tc++;
+			}
+
+			printf("minp : %d, maxp: %d, tc : %d, tc : %d\n", minp, maxp, to, tc);
 		}
 	}
 }

@@ -6,6 +6,6 @@ namespace CUDA
 {
 	namespace KDTree
 	{
-		void TestKDTree();
+		void TestKDTree(std::vector<Eigen::Vector3f> inputPoints);
 	}
 }
