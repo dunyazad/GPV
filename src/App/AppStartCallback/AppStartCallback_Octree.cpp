@@ -198,8 +198,6 @@ void AppStartCallback_Octree(App* pApp)
 	auto aabbMin = Eigen::Vector3f(aabb.min().minCoeff(), aabb.min().minCoeff(), aabb.min().minCoeff());
 	auto aabbMax = Eigen::Vector3f(aabb.max().maxCoeff(), aabb.max().maxCoeff(), aabb.max().maxCoeff());
 
-	Octant* octants = new Octant[ply.GetPoints().size() / 3];
-
 	vector<size_t> toSort;
 
 	for (size_t i = 0; i < ply.GetPoints().size() / 3; i++)
@@ -213,7 +211,6 @@ void AppStartCallback_Octree(App* pApp)
 		auto code = GetMortonCode(aabbMax, aabbMin, maxDepth, { x, y, z });
 		//std::cout << "Morton Code (binary): " << std::bitset<64>(code) << std::endl;
 
-		octants[i].code = code;
 		toSort.push_back(code);
 	}
 
@@ -228,10 +225,16 @@ void AppStartCallback_Octree(App* pApp)
 	//Plot(pApp, toSort);
 	pApp->GetChartRenderer()->DrawOff();
 
+	auto t = Time::Now();
+
 	Octree octree;
 	PopulateOctree(&octree, toSort, maxDepth);
 
+	t = Time::End(t, "Populate Octree");
+
 	VisualizeOctree(&octree, maxDepth, (aabbMin + aabbMax) * 0.5f, (aabbMax - aabbMin).maxCoeff() * 0.5f);
+
+	t = Time::End(t, "Visualize Octree");
 
 	//LoadModel(pApp->GetRenderer(), "C:\\Resources\\3D\\PLY\\Complete\\Lower.ply");
 	//CUDA::Octree::TestOctree();
