@@ -20,12 +20,12 @@ void AppStartCallback_KDTree(App* pApp)
 		}
 	}
 
-	VD::AddGrid("grid", { 0.0f, 0.0f, 0.0f }, { 1.0f, 0.0f, 0.0f }, 40.0f, 48.0f, 0.1f, Color4::Red);
-	VD::AddGrid("grid", { 0.0f, 0.0f, 0.0f }, { 1.0f, 1.0f, 0.0f }, 40.0f, 48.0f, 0.1f, Color4::Yellow);
-	VD::AddGrid("grid", { 0.0f, 0.0f, 0.0f }, { 0.0f, 1.0f, 0.0f }, 40.0f, 48.0f, 0.1f, Color4::Green);
-	VD::AddGrid("grid", { 0.0f, 0.0f, 0.0f }, { 0.0f, 1.0f, 1.0f }, 40.0f, 48.0f, 0.1f, Color4::Cyan);
-	VD::AddGrid("grid", { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 1.0f }, 40.0f, 48.0f, 0.1f, Color4::Blue);
-	VD::AddGrid("grid", { 0.0f, 0.0f, 0.0f }, { 1.0f, 0.0f, 1.0f }, 40.0f, 48.0f, 0.1f, Color4::Magenta);
+	//VD::AddGrid("grid", { 0.0f, 0.0f, 0.0f }, { 1.0f, 0.0f, 0.0f }, 40.0f, 48.0f, 0.1f, Color4::Red);
+	//VD::AddGrid("grid", { 0.0f, 0.0f, 0.0f }, { 1.0f, 1.0f, 0.0f }, 40.0f, 48.0f, 0.1f, Color4::Yellow);
+	//VD::AddGrid("grid", { 0.0f, 0.0f, 0.0f }, { 0.0f, 1.0f, 0.0f }, 40.0f, 48.0f, 0.1f, Color4::Green);
+	//VD::AddGrid("grid", { 0.0f, 0.0f, 0.0f }, { 0.0f, 1.0f, 1.0f }, 40.0f, 48.0f, 0.1f, Color4::Cyan);
+	//VD::AddGrid("grid", { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 1.0f }, 40.0f, 48.0f, 0.1f, Color4::Blue);
+	//VD::AddGrid("grid", { 0.0f, 0.0f, 0.0f }, { 1.0f, 0.0f, 1.0f }, 40.0f, 48.0f, 0.1f, Color4::Magenta);
 
 	VisualDebugging::AddLine("axes", { 0, 0, 0 }, { 100.0f, 0.0f, 0.0f }, Color4::Red);
 	VisualDebugging::AddLine("axes", { 0, 0, 0 }, { 0.0f, 100.0f, 0.0f }, Color4::Green);

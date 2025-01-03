@@ -146,6 +146,7 @@ public:
 #endif
 
     inline vtkSmartPointer<vtkRenderer> GetRenderer() const { return renderer; }
+    inline vtkSmartPointer<vtkRenderer> GetChartRenderer() const { return chartRenderer; }
     inline vtkSmartPointer<vtkRenderWindow> GetRenderWindow() const { return renderWindow; }
     inline vtkSmartPointer<vtkRenderWindowInteractor> GetInteractor() const { return interactor; }
 
@@ -161,6 +162,7 @@ private:
     static set<App*> s_instances;
     AppConfiguration configuration;
     vtkSmartPointer<vtkRenderer> renderer;
+    vtkSmartPointer<vtkRenderer> chartRenderer;
     vtkSmartPointer<vtkRenderWindow> renderWindow;
     vtkSmartPointer<vtkRenderWindowInteractor> interactor;
     vtkSmartPointer<CustomTrackballStyle> customTrackballStyle;

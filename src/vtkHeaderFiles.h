@@ -113,3 +113,11 @@
 #include <vtkImageData.h>
 #include <vtkPNGReader.h>
 #include <vtkPNGWriter.h>
+
+#include <vtkChartXY.h>
+#include <vtkTable.h>
+#include <vtkPlot.h>
+#include <vtkContextView.h>
+#include <vtkContextActor.h>
+#include <vtkContextScene.h>
+#include <vtkPen.h>

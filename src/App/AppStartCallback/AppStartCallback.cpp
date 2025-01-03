@@ -393,7 +393,7 @@ bool AppStartCallback(App* pApp)
 	//AppStartCallback_Convert(pApp);
 	//AppStartCallback_LoadPNT(pApp);
 	//AppStartCallback_KDTree(pApp);
-	//AppStartCallback_Octree(pApp);
+	AppStartCallback_Octree(pApp);
 	//AppStartCallback_Poisson(pApp);
 	//AppStartCallback_NanoVDB(pApp);
 	//AppStartCallback_Simple(pApp);
@@ -406,7 +406,7 @@ bool AppStartCallback(App* pApp)
 	
 	//AppStartCallback_MarchingCubes(pApp);
 
-	AppStartCallback_Patches(pApp);
+	//AppStartCallback_Patches(pApp);
 	//AppStartCallback_HalfEdges(pApp);
 
 	return true;
