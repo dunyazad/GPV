@@ -47,42 +47,6 @@ uint64_t GetMortonCode(const Eigen::Vector3f& max, const Eigen::Vector3f& min, i
 	return mortonCode;
 }
 
-// Utility Functions for Morton Code
-uint32_t ExtractBitsFromMorton(uint64_t mortonCode, int startBit, int depth) {
-	uint32_t value = 0;
-	for (int i = 0; i < depth; ++i) {
-		value |= ((mortonCode >> (3 * i + startBit)) & 1ULL) << i;
-	}
-	return value;
-}
-
-uint32_t ExtractValueFromMorton(uint64_t mortonCode, int startBit, int depth) {
-	uint32_t value = 0;
-	for (int i = 0; i < depth; ++i) {
-		value |= ((mortonCode >> (3 * i + startBit)) & 111ULL) << i;
-	}
-	return value;
-}
-
-Eigen::Vector3f CalculatePositionFromMortonCode(uint64_t mortonCode, int depth, const Eigen::Vector3f& min, const Eigen::Vector3f& max) {
-	uint32_t x = ExtractBitsFromMorton(mortonCode, 0, depth);
-	uint32_t y = ExtractBitsFromMorton(mortonCode, 1, depth);
-	uint32_t z = ExtractBitsFromMorton(mortonCode, 2, depth);
-
-	uint32_t numSubdivisions = 1 << depth;
-	Eigen::Vector3f voxelSize = (max - min) / numSubdivisions;
-
-	return min + Eigen::Vector3f(x, y, z).cwiseProduct(voxelSize) + (voxelSize * 0.5f);
-}
-
-Eigen::Vector3f CalculateVoxelSizeFromMortonCode(uint64_t mortonCode, int depth, const Eigen::Vector3f& min, const Eigen::Vector3f& max)
-{
-	Eigen::Vector3f span = max - min;
-	float subdivisions = static_cast<float>(1 << depth); // 2^depth
-	Eigen::Vector3f voxelSize = span / subdivisions;
-	return voxelSize;
-}
-
 template<typename T>
 void Plot(App* pApp, const vector<T>& values)
 {
@@ -124,7 +88,6 @@ void Populate(Octant* octant, size_t mortonCode, int depth, int maxDepth)
 	if (nullptr == octant->children[index])
 	{
 		octant->children[index] = new Octant;
-		//octant->children[index]->code = 
 	}
 
 	if (depth <= maxDepth)
