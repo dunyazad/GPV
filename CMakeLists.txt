@@ -85,6 +85,7 @@ set(source_list
     src/App/AppStartCallback/AppStartCallback.h
     src/App/AppStartCallback/AppStartCallback.cpp
     src/App/AppStartCallback/AppStartCallback_Capture.cpp
+    src/App/AppStartCallback/AppStartCallback_Clustering.cpp
     src/App/AppStartCallback/AppStartCallback_HalfEdges.cpp
     src/App/AppStartCallback/AppStartCallback_HashMap.cpp
     src/App/AppStartCallback/AppStartCallback_Integrate.cpp

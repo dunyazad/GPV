@@ -396,7 +396,7 @@ bool AppStartCallback(App* pApp)
 	//AppStartCallback_Octree(pApp);
 	//AppStartCallback_Poisson(pApp);
 	//AppStartCallback_NanoVDB(pApp);
-	AppStartCallback_Simple(pApp);
+	//AppStartCallback_Simple(pApp);
 
 	//AppStartCallback_Octree(pApp);
 	//AppStartCallback_RegularGrid(pApp);
@@ -408,6 +408,8 @@ bool AppStartCallback(App* pApp)
 
 	//AppStartCallback_Patches(pApp);
 	//AppStartCallback_HalfEdges(pApp);
+
+	AppStartCallback_Clustering(pApp);
 
 	return true;
 }

@@ -56,6 +56,7 @@ void LoadDepthImage();
 
 bool AppStartCallback(App* pApp);
 void AppStartCallback_Capture(App* pApp);
+void AppStartCallback_Clustering(App* pApp);
 void AppStartCallback_SaveTRN(App* pApp);
 void AppStartCallback_HalfEdges(App* pApp);
 void AppStartCallback_HashMap(App* pApp);
