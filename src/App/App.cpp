@@ -74,16 +74,16 @@ void App::Run()
 	renderer = vtkSmartPointer<vtkRenderer>::New();
 	renderer->SetBackground(0.3, 0.5, 0.7);
 
-	chartRenderer = vtkSmartPointer<vtkRenderer>::New();
-	chartRenderer->SetViewport(0.5, 0.5, 1.0, 1.0);
-	chartRenderer->SetBackground(1.0, 1.0, 1.0);
+	//chartRenderer = vtkSmartPointer<vtkRenderer>::New();
+	//chartRenderer->SetViewport(0.5, 0.5, 1.0, 1.0);
+	//chartRenderer->SetBackground(1.0, 1.0, 1.0);
 
 	//renderer->GetActiveCamera()->SetClippingRange(0.001, 40.0);
 
 	renderWindow = vtkSmartPointer<vtkRenderWindow>::New();
 	renderWindow->SetSize(configuration.windowWidth, configuration.windowHeight);
 	renderWindow->AddRenderer(renderer);
-	renderWindow->AddRenderer(chartRenderer);
+	//renderWindow->AddRenderer(chartRenderer);
 
 	interactor = vtkSmartPointer<vtkRenderWindowInteractor>::New();
 	customTrackballStyle = vtkSmartPointer<CustomTrackballStyle>::New();

@@ -277,8 +277,8 @@ namespace CUDA
 
 			PLYFormat ply;
 			ply.Deserialize(ss.str());
-			cout << "ply min : " << ply.GetAABB().min().transpose() << endl;
-			cout << "ply max : " << ply.GetAABB().max().transpose() << endl;
+			cout << "ply min : " << ply.GetAABBMin().transpose() << endl;
+			cout << "ply max : " << ply.GetAABBMax().transpose() << endl;
 
 			t = Time::End(t, "Load ply");
 

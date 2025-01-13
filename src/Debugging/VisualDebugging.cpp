@@ -424,6 +424,29 @@ void VisualDebugging::AddSphere(const string& layerName, const Eigen::Vector3f& 
 	s_needToRender = true;
 }
 
+void VisualDebugging::AddBox(const string& layerName, const Eigen::Vector3f& boxMin, const Eigen::Vector3f& boxMax, const Color4& color)
+{
+	AddBox(layerName, boxMin, boxMax, { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, color);
+}
+
+void VisualDebugging::AddBox(const string& layerName, const Eigen::Vector3f& boxMin, const Eigen::Vector3f& boxMax, float scale, const Color4& color)
+{
+	AddBox(layerName, boxMin, boxMax, { scale, scale, scale }, { 0.0f, 0.0f, 0.0f }, color);
+}
+
+void VisualDebugging::AddBox(const string& layerName, const Eigen::Vector3f& boxMin, const Eigen::Vector3f& boxMax, const Eigen::Vector3f& scale, const Eigen::Vector3f& normal, const Color4& color)
+{
+	auto layer = GetLayer(layerName);
+	if (nullptr == layer)
+	{
+		layer = CreateLayer(layerName);
+	}
+
+	layer->AddBox(boxMin, boxMax, scale, normal, color);
+
+	s_needToRender = true;
+}
+
 void VisualDebugging::AddCube(const string& layerName, const Eigen::Vector3f& center, const Color4& color)
 {
 	AddCube(layerName, center, { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, color);

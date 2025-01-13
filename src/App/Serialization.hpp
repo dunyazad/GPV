@@ -226,7 +226,13 @@ public:
 
 		if (FLT_VALID(x) && FLT_VALID(y) && FLT_VALID(z))
 		{
-			aabb.extend(Eigen::Vector3f(x, y, z));
+			aabbMin.x() = x < aabbMin.x() ? x : aabbMin.x();
+			aabbMin.y() = y < aabbMin.y() ? y : aabbMin.y();
+			aabbMin.z() = z < aabbMin.z() ? z : aabbMin.z();
+
+			aabbMax.x() = x > aabbMax.x() ? x : aabbMax.x();
+			aabbMax.y() = y > aabbMax.y() ? y : aabbMax.y();
+			aabbMax.z() = z > aabbMax.z() ? z : aabbMax.z();
 		}
 	}
 
@@ -239,7 +245,13 @@ public:
 
 		if (FLT_VALID(x) && FLT_VALID(y) && FLT_VALID(z))
 		{
-			aabb.extend(Eigen::Vector3f(x, y, z));
+			aabbMin.x() = x < aabbMin.x() ? x : aabbMin.x();
+			aabbMin.y() = y < aabbMin.y() ? y : aabbMin.y();
+			aabbMin.z() = z < aabbMin.z() ? z : aabbMin.z();
+
+			aabbMax.x() = x > aabbMax.x() ? x : aabbMax.x();
+			aabbMax.y() = y > aabbMax.y() ? y : aabbMax.y();
+			aabbMax.z() = z > aabbMax.z() ? z : aabbMax.z();
 		}
 	}
 
@@ -251,7 +263,13 @@ public:
 
 		if (FLT_VALID(point[0]) && FLT_VALID(point[1]) && FLT_VALID(point[2]))
 		{
-			aabb.extend(Eigen::Vector3f(point[0], point[1], point[2]));
+			aabbMin.x() = point[0] < aabbMin.x() ? point[0] : aabbMin.x();
+			aabbMin.y() = point[1] < aabbMin.y() ? point[1] : aabbMin.y();
+			aabbMin.z() = point[2] < aabbMin.z() ? point[2] : aabbMin.z();
+
+			aabbMax.x() = point[0] > aabbMax.x() ? point[0] : aabbMax.x();
+			aabbMax.y() = point[1] > aabbMax.y() ? point[1] : aabbMax.y();
+			aabbMax.z() = point[2] > aabbMax.z() ? point[2] : aabbMax.z();
 		}
 	}
 
@@ -264,19 +282,27 @@ public:
 
 		if (FLT_VALID(point[0]) && FLT_VALID(point[1]) && FLT_VALID(point[2]))
 		{
-			aabb.extend(Eigen::Vector3f(point[0], point[1], point[2]));
+			aabbMin.x() = point[0] < aabbMin.x() ? point[0] : aabbMin.x();
+			aabbMin.y() = point[1] < aabbMin.y() ? point[1] : aabbMin.y();
+			aabbMin.z() = point[2] < aabbMin.z() ? point[2] : aabbMin.z();
+
+			aabbMax.x() = point[0] > aabbMax.x() ? point[0] : aabbMax.x();
+			aabbMax.y() = point[1] > aabbMax.y() ? point[1] : aabbMax.y();
+			aabbMax.z() = point[2] > aabbMax.z() ? point[2] : aabbMax.z();
 		}
 	}
 
 	inline const vector<float>& GetPoints() const { return points; }
 	inline vector<float>& GetPoints() { return points; }
 
-	inline const Eigen::AlignedBox3f GetAABB() const { return aabb; }
+	inline const Eigen::Vector3f GetAABBMin() const { return aabbMin; }
+	inline const Eigen::Vector3f GetAABBMax() const { return aabbMax; }
 
 protected:
 	vector<float> points;
-	Eigen::AlignedBox3f aabb;
-};
+	Eigen::Vector3f aabbMin = Eigen::Vector3f(FLT_MAX, FLT_MAX, FLT_MAX);
+	Eigen::Vector3f aabbMax = Eigen::Vector3f(-FLT_MAX, -FLT_MAX, -FLT_MAX);
+};		
 
 class XYZFormat : public HSerializable
 {

@@ -50,6 +50,8 @@ public:
 
 	void AddSphere(const Eigen::Vector3f& center, const Eigen::Vector3f& scale, const Eigen::Vector3f& normal, const Color4& color);
 	
+	void AddBox(const Eigen::Vector3f& boxMin, const Eigen::Vector3f& boxMax, const Eigen::Vector3f& scale, const Eigen::Vector3f& normal, const Color4& color);
+
 	void AddCube(const Eigen::Vector3f& center, const Eigen::Vector3f& scale, const Eigen::Vector3f& normal, const Color4& color);
 
 	void AddGlyph(const Eigen::Vector3f& center, const Eigen::Vector3f& scale, const Eigen::Vector3f& normal, const Color4& color);
@@ -163,6 +165,7 @@ private:
 	void DrawLines();
 	void DrawTriangle();
 	void DrawSpheres();
+	void DrawBoxes();
 	void DrawCubes();
 	void DrawGlyphs();
 	void DrawArrows();
@@ -172,6 +175,7 @@ private:
 	vector<std::tuple<Eigen::Vector3f, Eigen::Vector3f, Color4>> lineInfosToDraw;
 	vector<std::tuple<Eigen::Vector3f, Eigen::Vector3f, Eigen::Vector3f, Color4>> triangleInfosToDraw;
 	vector<std::tuple<Eigen::Vector3f, Eigen::Vector3f, Eigen::Vector3f, Color4>> sphereInfosToDraw;
+	vector<std::tuple<Eigen::Vector3f, Eigen::Vector3f, Eigen::Vector3f, Eigen::Vector3f, Color4>> boxInfosToDraw;
 	vector<std::tuple<Eigen::Vector3f, Eigen::Vector3f, Eigen::Vector3f, Color4>> cubeInfosToDraw;
 	vector<std::tuple<Eigen::Vector3f, Eigen::Vector3f, Eigen::Vector3f, Color4>> glyphInfosToDraw;
 	vector<std::tuple<Eigen::Vector3f, Eigen::Vector3f, float, Color4>> arrowInfosToDraw;

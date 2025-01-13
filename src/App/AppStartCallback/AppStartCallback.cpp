@@ -393,10 +393,10 @@ bool AppStartCallback(App* pApp)
 	//AppStartCallback_Convert(pApp);
 	//AppStartCallback_LoadPNT(pApp);
 	//AppStartCallback_KDTree(pApp);
-	AppStartCallback_Octree(pApp);
+	//AppStartCallback_Octree(pApp);
 	//AppStartCallback_Poisson(pApp);
 	//AppStartCallback_NanoVDB(pApp);
-	//AppStartCallback_Simple(pApp);
+	AppStartCallback_Simple(pApp);
 
 	//AppStartCallback_Octree(pApp);
 	//AppStartCallback_RegularGrid(pApp);

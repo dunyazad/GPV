@@ -138,6 +138,45 @@ void VisualDebuggingLayer::Initialize(vtkSmartPointer<vtkRenderer> renderer)
 	}
 #pragma endregion
 
+#pragma region Box
+	{
+		auto element = new VisualDebuggingLayerElementGlyph(renderer);
+		elements["Boxes"] = element;
+
+		vtkNew<vtkPoints> points;
+		element->polyData->SetPoints(points);
+
+		vtkNew<vtkUnsignedCharArray> colors;
+		colors->SetName("Colors");
+		colors->SetNumberOfComponents(3);
+		element->polyData->GetPointData()->AddArray(colors);
+
+		vtkNew<vtkDoubleArray> scales;
+		scales->SetNumberOfComponents(1);
+		scales->SetName("Scales");
+		scales->SetNumberOfComponents(3);
+		element->polyData->GetPointData()->AddArray(scales);
+
+		vtkNew<vtkDoubleArray> normals;
+		normals->SetNumberOfComponents(3);
+		normals->SetName("Normals");
+		element->polyData->GetPointData()->AddArray(normals);
+
+		vtkNew<vtkCubeSource> boxSource;
+		boxSource->Update();
+
+		element->glyphMapper->SetSourceConnection(boxSource->GetOutputPort());
+		element->glyphMapper->SetInputData(element->polyData);
+		element->glyphMapper->SetScalarModeToUsePointFieldData();
+		element->glyphMapper->SetScaleModeToScaleByVectorComponents();
+		element->glyphMapper->SetScaleArray("Scales");
+		element->glyphMapper->SelectColorArray("Colors");
+		element->glyphMapper->SetOrientationArray("Normals");
+		element->glyphMapper->OrientOn();
+		element->glyphMapper->Update();
+	}
+#pragma endregion
+
 #pragma region Cube
 	{
 		auto element = new VisualDebuggingLayerElementGlyph(renderer);
@@ -292,6 +331,7 @@ void VisualDebuggingLayer::Update()
 	DrawLines();
 	DrawTriangle();
 	DrawSpheres();
+	DrawBoxes();
 	DrawCubes();
 	DrawGlyphs();
 	DrawArrows();
@@ -328,6 +368,11 @@ void VisualDebuggingLayer::AddTriangle(const Eigen::Vector3f& p0, const Eigen::V
 void VisualDebuggingLayer::AddSphere(const Eigen::Vector3f& center, const Eigen::Vector3f& scale, const Eigen::Vector3f& normal, const Color4& color)
 {
 	sphereInfosToDraw.push_back(std::make_tuple(center, scale, normal, color));
+}
+
+void VisualDebuggingLayer::AddBox(const Eigen::Vector3f& boxMin, const Eigen::Vector3f& boxMax, const Eigen::Vector3f& scale, const Eigen::Vector3f& normal, const Color4& color)
+{
+	boxInfosToDraw.push_back(std::make_tuple(boxMin, boxMax, scale, normal, color));
 }
 
 void VisualDebuggingLayer::AddCube(const Eigen::Vector3f& center, const Eigen::Vector3f& scale, const Eigen::Vector3f& normal, const Color4& color)
@@ -556,6 +601,49 @@ void VisualDebuggingLayer::DrawSpheres()
 	elements["Lines"]->polyDataMapper->Update();
 
 	sphereInfosToDraw.clear();
+}
+
+void VisualDebuggingLayer::DrawBoxes()
+{
+	if (boxInfosToDraw.empty())
+		return;
+
+	auto points = elements["Cubes"]->polyData->GetPoints();
+	auto pointData = elements["Cubes"]->polyData->GetPointData();
+	vtkDoubleArray* scales =
+		vtkDoubleArray::SafeDownCast(pointData->GetArray("Scales"));
+	vtkDoubleArray* normals =
+		vtkDoubleArray::SafeDownCast(pointData->GetArray("Normals"));
+	vtkUnsignedCharArray* colors =
+		vtkUnsignedCharArray::SafeDownCast(pointData->GetArray("Colors"));
+
+	for (auto& boxInfo : boxInfosToDraw)
+	{
+		auto boxMin = std::get<0>(boxInfo);
+		auto boxMax = std::get<1>(boxInfo);
+		auto scale = std::get<2>(boxInfo);
+		auto normal = std::get<3>(boxInfo);
+		auto color = std::get<4>(boxInfo);
+
+
+		Eigen::Vector3f boxDimension = boxMax - boxMin;
+		scale.x() = boxDimension.x() * scale.x();
+		scale.y() = boxDimension.y() * scale.y();
+		scale.z() = boxDimension.z() * scale.z();
+
+		Eigen::Vector3f center = (boxMin + boxMax) * 0.5f;
+
+		points->InsertNextPoint(center.data());
+		//scales->InsertNextValue(scale);
+		scales->InsertNextTuple3(scale.x(), scale.y(), scale.z());
+		normals->InsertNextTuple3(normal.x(), normal.y(), normal.z());
+		colors->InsertNextTypedTuple(color.data());
+	}
+
+	points->Modified();
+	elements["Boxes"]->polyDataMapper->Update();
+
+	boxInfosToDraw.clear();
 }
 
 void VisualDebuggingLayer::DrawCubes()

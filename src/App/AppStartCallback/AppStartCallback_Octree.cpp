@@ -156,10 +156,11 @@ void AppStartCallback_Octree(App* pApp)
 
 	PLYFormat ply;
 	ply.Deserialize("C:\\Resources\\3D\\PLY\\Complete\\Lower_pointcloud.ply");
-	auto& aabb = ply.GetAABB();
+	auto aabbMin = ply.GetAABBMin();
+	auto aabbMax = ply.GetAABBMax();
 
-	auto aabbMin = Eigen::Vector3f(aabb.min().minCoeff(), aabb.min().minCoeff(), aabb.min().minCoeff());
-	auto aabbMax = Eigen::Vector3f(aabb.max().maxCoeff(), aabb.max().maxCoeff(), aabb.max().maxCoeff());
+	aabbMin = Eigen::Vector3f(aabbMin.minCoeff(), aabbMin.minCoeff(), aabbMin.minCoeff());
+	aabbMax = Eigen::Vector3f(aabbMax.maxCoeff(), aabbMax.maxCoeff(), aabbMax.maxCoeff());
 
 	vector<size_t> toSort;
 
@@ -186,7 +187,7 @@ void AppStartCallback_Octree(App* pApp)
 	}
 
 	//Plot(pApp, toSort);
-	pApp->GetChartRenderer()->DrawOff();
+	//pApp->GetChartRenderer()->DrawOff();
 
 	auto t = Time::Now();
 
