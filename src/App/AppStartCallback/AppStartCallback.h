@@ -5,6 +5,7 @@
 #include <App/AppEventHandlers.h>
 
 #include <CUDA/CUDA.cuh>
+#include <CUDA/Clustering.cuh>
 #include <CUDA/HalfEdge.cuh>
 #include <CUDA/HashMap.cuh>
 #include <CUDA/MarchingCubes.cuh>
@@ -12,6 +13,7 @@
 #include <CUDA/PSR.cuh>
 #include <CUDA/RegularGrid.cuh>
 #include <CUDA/SVO.cuh>
+#include <CUDA/ZSparseBlocks.cuh>
 
 extern int pid;
 extern size_t size_0;
@@ -69,3 +71,4 @@ void AppStartCallback_PSR(App* pApp);
 void AppStartCallback_RegularGrid(App* pApp);
 void AppStartCallback_Simple(App* pApp);
 void AppStartCallback_SVO(App* pApp);
+void AppStartCallback_ZSparseBlocks(App* pApp);

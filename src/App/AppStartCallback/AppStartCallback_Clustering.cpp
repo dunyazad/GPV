@@ -71,7 +71,7 @@ size_t FloodFill(Node* node, int tag) {
 	return count;
 };
 
-void AppStartCallback_Clustering(App* pApp)
+void AppStartCallback_Clustering_Host(App* pApp)
 {
 	auto renderer = pApp->GetRenderer();
 
@@ -190,10 +190,16 @@ void AppStartCallback_Clustering(App* pApp)
 	Color4 colors[6] = { Color4::Green, Color4::Blue, Color4::Black,
 		                 Color4::Yellow, Color4::Magenta, Color4::Cyan };
 
+	int maxNeighborCount = 0;
 	for (auto& kvp : quantizingMap)
 	{
 		auto key = kvp.first;
 		auto& position = GetPosition(volumeMin, voxelSize, key);
+
+		if (maxNeighborCount < kvp.second->neigborCount)
+		{
+			maxNeighborCount = kvp.second->neigborCount;
+		}
 
 		if (-1 == kvp.second->tag)
 		{
@@ -203,7 +209,7 @@ void AppStartCallback_Clustering(App* pApp)
 		{
 			if (tagVoxelCount[kvp.second->tag] < 10000)
 			{
-				VD::AddCube("cubes", position + Eigen::Vector3f(voxelSize * 0.5f, voxelSize * 0.5f, voxelSize * 0.5f), voxelSize * 0.5f, Color4::Red);
+				//VD::AddCube("cubes", position + Eigen::Vector3f(voxelSize * 0.5f, voxelSize * 0.5f, voxelSize * 0.5f), voxelSize * 0.5f, Color4::Red);
 			}
 			else
 			{
@@ -212,6 +218,7 @@ void AppStartCallback_Clustering(App* pApp)
 		}
 	}
 
+	printf("maxNeighborCount : %d\n", maxNeighborCount);
 	//printf("tagCount : %d\n", tagCount);
 	//printf("quantizingMap.size() : %d\n", quantizingMap.size());
 
@@ -221,4 +228,9 @@ void AppStartCallback_Clustering(App* pApp)
 	{
 		delete kvp.second;
 	}
+}
+
+void AppStartCallback_Clustering(App* pApp)
+{
+	CUDA::Clustering::TestClustering();
 }

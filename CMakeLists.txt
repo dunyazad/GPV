@@ -48,6 +48,8 @@ set(cuda_source_list
     src/CUDA/CUDA_Common.cuh
     src/CUDA/CUDA.cuh
     src/CUDA/CUDA.cu
+    src/CUDA/Clustering.cuh
+    src/CUDA/Clustering.cu
     src/CUDA/HalfEdge.cuh
     src/CUDA/HalfEdge.cu
     src/CUDA/HashMap.cuh
@@ -64,6 +66,8 @@ set(cuda_source_list
     src/CUDA/RegularGrid.cu
     src/CUDA/SVO.cuh
     src/CUDA/SVO.cu
+    src/CUDA/ZSparseBlocks.cuh
+    src/CUDA/ZSparseBlocks.cu
 )
 
 set(source_list
@@ -98,6 +102,7 @@ set(source_list
     src/App/AppStartCallback/AppStartCallback_SaveTRN.cpp
     src/App/AppStartCallback/AppStartCallback_Simple.cpp
     src/App/AppStartCallback/AppStartCallback_SVO.cpp
+    src/App/AppStartCallback/AppStartCallback_ZSparseBlocks.cpp
     src/App/USBHandler.h
     src/App/USBHandler.cpp
     src/App/Utility.h

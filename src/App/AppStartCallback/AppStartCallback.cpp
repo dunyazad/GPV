@@ -409,7 +409,8 @@ bool AppStartCallback(App* pApp)
 	//AppStartCallback_Patches(pApp);
 	//AppStartCallback_HalfEdges(pApp);
 
-	AppStartCallback_Clustering(pApp);
+	//AppStartCallback_Clustering(pApp);
+	AppStartCallback_ZSparseBlocks(pApp);
 
 	return true;
 }
