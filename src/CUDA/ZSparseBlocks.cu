@@ -210,7 +210,7 @@ namespace CUDA
 		}
 
 		__global__
-			void Kernel_InsertPoints_Test(Grid* grid)
+			void Kernel_InsertPoints_Test(Grid* grid, Eigen::Vector3f* d_debugPoints, unsigned int* d_numberOfDebugPoints)
 		{
 			printf("grid->allocatedNodeIndex : %d\n", grid->allocatedNodeIndex);
 
@@ -227,7 +227,9 @@ namespace CUDA
 					auto node = grid->nodes[y * grid->xLength + x];
 					if (nullptr != node)
 					{
-						printf("zIndex : %d\n", node->zIndex);
+						auto position = GetPosition(grid, x, y, node->zIndex);
+						auto index = atomicAdd(d_numberOfDebugPoints, 1);
+						d_debugPoints[index] = position;
 					}
 				}
 			}
@@ -273,7 +275,8 @@ namespace CUDA
 				auto y = ply.GetPoints()[i * 3 + 1];
 				auto z = ply.GetPoints()[i * 3 + 2];
 
-				VD::AddSphere("Points", { x, y, z }, 0.05f, Color4::White);
+				//VD::AddSphere("Points", { x, y, 0.0f }, 0.025f, Color4::White);
+				VD::AddSphere("Points", { x, y, z }, 0.025f, Color4::White);
 
 				loadedPoints.push_back({ x,y, z });
 			}
@@ -290,17 +293,39 @@ namespace CUDA
 
 			checkCudaErrors(cudaDeviceSynchronize());
 
+			nvtxRangePushA("InsertPoints");
+
 			int threadblocksize = 512;
 			uint32_t gridsize = (numberOfPoints - 1) / threadblocksize;
 			Kernel_InsertPoints << < gridsize, threadblocksize >> > (d_grid, d_points, numberOfPoints);
 
 			checkCudaErrors(cudaDeviceSynchronize());
 
+			nvtxRangePop();
+
 			printf("After InsertPoints\n");
 
-			Kernel_InsertPoints_Test << <1, 1 >> > (d_grid);
+			Eigen::Vector3f* d_debugPoints;
+			cudaMalloc(&d_debugPoints, sizeof(Eigen::Vector3f) * 3000000);
+			Eigen::Vector3f* h_debugPoints = new Eigen::Vector3f[3000000];
 
+			unsigned int* debugPointCount;
+			cudaMalloc(&debugPointCount, sizeof(unsigned int));
+			Kernel_InsertPoints_Test << <1, 1 >> > (d_grid, d_debugPoints, debugPointCount);
+
+			unsigned int h_debugPointCount = 0;
+			cudaMemcpy(&h_debugPointCount, debugPointCount, sizeof(unsigned int), cudaMemcpyDeviceToHost);
+
+			cudaMemcpy(h_debugPoints, d_debugPoints, sizeof(Eigen::Vector3f) * h_debugPointCount, cudaMemcpyDeviceToHost);
 			checkCudaErrors(cudaDeviceSynchronize());
+
+			printf("h_debugPointCount : %d\n", h_debugPointCount);
+			for (size_t i = 0; i < h_debugPointCount; i++)
+			{
+				auto& p = h_debugPoints[i];
+				//VD::AddCube("cudbes", { p.x() + 0.05f, p.y() + 0.05f, 0.0f }, 0.05f, Color4::Red);
+				VD::AddCube("cudbes", p, 0.05f, Color4::Red);
+			}
 
 			TerminateGrid(h_grid, d_grid);
 
