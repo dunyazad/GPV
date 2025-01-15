@@ -125,7 +125,7 @@ void LoadPatch(int patchID, vtkRenderer* renderer)
 	std::cout << gaabb_45.min().transpose() << std::endl;
 	std::cout << gaabb_45.max().transpose() << std::endl;
 
-	return;
+	//return;
 
 	//VisualDebugging::AddCube("aabb", (aabb.min() + aabb.max()) * 0.5f, aabb.max() - aabb.min(), { 0.0f, 0.0f, 0.0f }, Color4::Red);
 
@@ -410,7 +410,10 @@ bool AppStartCallback(App* pApp)
 	//AppStartCallback_HalfEdges(pApp);
 
 	//AppStartCallback_Clustering(pApp);
-	AppStartCallback_ZSparseBlocks(pApp);
+	//AppStartCallback_ZSparseBlocks(pApp);
+
+	//AppStartCallback_ShrinkPatch(pApp);
+	AppStartCallback_Cache(pApp);
 
 	return true;
 }

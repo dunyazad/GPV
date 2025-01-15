@@ -5,6 +5,7 @@
 #include <App/AppEventHandlers.h>
 
 #include <CUDA/CUDA.cuh>
+#include <CUDA/Cache.cuh>
 #include <CUDA/Clustering.cuh>
 #include <CUDA/HalfEdge.cuh>
 #include <CUDA/HashMap.cuh>
@@ -57,6 +58,7 @@ void CaptureNextFrame(App* pApp);
 void LoadDepthImage();
 
 bool AppStartCallback(App* pApp);
+void AppStartCallback_Cache(App* pApp);
 void AppStartCallback_Capture(App* pApp);
 void AppStartCallback_Clustering(App* pApp);
 void AppStartCallback_SaveTRN(App* pApp);
@@ -69,6 +71,7 @@ void AppStartCallback_Octree(App* pApp);
 void AppStartCallback_Patches(App* pApp);
 void AppStartCallback_PSR(App* pApp);
 void AppStartCallback_RegularGrid(App* pApp);
+void AppStartCallback_ShrinkPatch(App* pApp);
 void AppStartCallback_Simple(App* pApp);
 void AppStartCallback_SVO(App* pApp);
 void AppStartCallback_ZSparseBlocks(App* pApp);

@@ -20,26 +20,26 @@ public:
 
 	static VisualDebuggingLayer* CreateLayer(const string& layerName);
 
-	static void AddLine(const string& layerName, const Eigen::Vector3f& p0, const Eigen::Vector3f& p1, const Color4& color);
+	static void AddLine(const string& layerName, const Eigen::Vector3f& p0, const Eigen::Vector3f& p1, const Color4& color = Color4::White);
 
-	static void AddTriangle(const string& layerName, const Eigen::Vector3f& p0, const Eigen::Vector3f& p1, const Eigen::Vector3f& p2, const Color4& color);
+	static void AddTriangle(const string& layerName, const Eigen::Vector3f& p0, const Eigen::Vector3f& p1, const Eigen::Vector3f& p2, const Color4& color = Color4::White);
 
-	static void AddSphere(const string& layerName, const Eigen::Vector3f& center, float scale, const Color4& color);
-	static void AddSphere(const string& layerName, const Eigen::Vector3f& center, const Eigen::Vector3f& scale, const Eigen::Vector3f& normal, const Color4& color);
+	static void AddSphere(const string& layerName, const Eigen::Vector3f& center, float scale, const Color4& color = Color4::White);
+	static void AddSphere(const string& layerName, const Eigen::Vector3f& center, const Eigen::Vector3f& scale, const Eigen::Vector3f& normal, const Color4& color = Color4::White);
 
-	static void AddBox(const string& layerName, const Eigen::Vector3f& boxMin, const Eigen::Vector3f& boxMax, const Color4& color);
-	static void AddBox(const string& layerName, const Eigen::Vector3f& boxMin, const Eigen::Vector3f& boxMax, float scale, const Color4& color);
-	static void AddBox(const string& layerName, const Eigen::Vector3f& boxMin, const Eigen::Vector3f& boxMax, const Eigen::Vector3f& scale, const Eigen::Vector3f& normal, const Color4& color);
+	static void AddBox(const string& layerName, const Eigen::Vector3f& boxMin, const Eigen::Vector3f& boxMax, const Color4& color = Color4::White);
+	static void AddBox(const string& layerName, const Eigen::Vector3f& boxMin, const Eigen::Vector3f& boxMax, float scale, const Color4& color = Color4::White);
+	static void AddBox(const string& layerName, const Eigen::Vector3f& boxMin, const Eigen::Vector3f& boxMax, const Eigen::Vector3f& scale, const Eigen::Vector3f& normal, const Color4& color = Color4::White);
 
-	static void AddCube(const string& layerName, const Eigen::Vector3f& center, const Color4& color);
-	static void AddCube(const string& layerName, const Eigen::Vector3f& center, float scale, const Color4& color);
-	static void AddCube(const string& layerName, const Eigen::Vector3f& center, const Eigen::Vector3f& scale, const Eigen::Vector3f& normal, const Color4& color);
+	static void AddCube(const string& layerName, const Eigen::Vector3f& center, const Color4& color = Color4::White);
+	static void AddCube(const string& layerName, const Eigen::Vector3f& center, float scale, const Color4& color = Color4::White);
+	static void AddCube(const string& layerName, const Eigen::Vector3f& center, const Eigen::Vector3f& scale, const Eigen::Vector3f& normal, const Color4& color = Color4::White);
 
-	static void AddGlyph(const string& layerName, const Eigen::Vector3f& center, const Eigen::Vector3f& scale, const Eigen::Vector3f& normal, const Color4& color);
+	static void AddGlyph(const string& layerName, const Eigen::Vector3f& center, const Eigen::Vector3f& scale, const Eigen::Vector3f& normal, const Color4& color = Color4::White);
 
-	static void AddArrow(const string& layerName, const Eigen::Vector3f& center, const Eigen::Vector3f& normal, float scale, const Color4& color);
+	static void AddArrow(const string& layerName, const Eigen::Vector3f& center, const Eigen::Vector3f& normal, float scale, const Color4& color = Color4::White);
 
-	static void AddGrid(const string& layerName, const Eigen::Vector3f& position, const Eigen::Vector3f& normal, float width, float height, float interval, const Color4& color);
+	static void AddGrid(const string& layerName, const Eigen::Vector3f& position, const Eigen::Vector3f& normal, float width, float height, float interval, const Color4& color = Color4::White);
 
 	static void Update();
 	static void ClearAll();

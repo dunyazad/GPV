@@ -48,6 +48,8 @@ set(cuda_source_list
     src/CUDA/CUDA_Common.cuh
     src/CUDA/CUDA.cuh
     src/CUDA/CUDA.cu
+    src/CUDA/Cache.cuh
+    src/CUDA/Cache.cu
     src/CUDA/Clustering.cuh
     src/CUDA/Clustering.cu
     src/CUDA/HalfEdge.cuh
@@ -88,6 +90,7 @@ set(source_list
     src/App/Serialization.hpp
     src/App/AppStartCallback/AppStartCallback.h
     src/App/AppStartCallback/AppStartCallback.cpp
+    src/App/AppStartCallback/AppStartCallback_Cache.cpp
     src/App/AppStartCallback/AppStartCallback_Capture.cpp
     src/App/AppStartCallback/AppStartCallback_Clustering.cpp
     src/App/AppStartCallback/AppStartCallback_HalfEdges.cpp
@@ -100,6 +103,7 @@ set(source_list
     src/App/AppStartCallback/AppStartCallback_PSR.cpp
     src/App/AppStartCallback/AppStartCallback_RegularGrid.cpp
     src/App/AppStartCallback/AppStartCallback_SaveTRN.cpp
+    src/App/AppStartCallback/AppStartCallback_ShrinkPatch.cpp
     src/App/AppStartCallback/AppStartCallback_Simple.cpp
     src/App/AppStartCallback/AppStartCallback_SVO.cpp
     src/App/AppStartCallback/AppStartCallback_ZSparseBlocks.cpp
