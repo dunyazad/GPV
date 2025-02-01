@@ -98,7 +98,7 @@ void App::Run()
 #ifdef _WINDOWS
 	if (configuration.maximizeRenderWindow)
 	{
-		MaximizeVTKWindowOnMonitor(renderWindow, 2);
+		MaximizeVTKWindowOnMonitor(renderWindow, 3);
 	}
 #endif
 

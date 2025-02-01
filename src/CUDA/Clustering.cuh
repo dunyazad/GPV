@@ -4,6 +4,8 @@
 
 #include <App/Serialization.hpp>
 
+class App;
+
 namespace CUDA
 {
 	namespace Clustering

@@ -150,6 +150,7 @@ target_include_directories(GPV PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     "External"
     "External/eigen"
+    "External/nvapi"
     #"External/nanoflann"
     #"External/nanovdb"
     ${VTK_INCLUDE_DIRS}
@@ -161,6 +162,7 @@ target_include_directories(cuda_objects PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     "External"
     "External/eigen"
+    "External/nvapi"
     #"External/nanoflann"
     #"External/nanovdb"
     ${VTK_INCLUDE_DIRS}
@@ -173,6 +175,7 @@ target_link_libraries(GPV
     CUDA::cudart CUDA::cuda_driver
     CUDA::cusolver CUDA::cusparse
     CUDA::cufft
+    ${CMAKE_CURRENT_SOURCE_DIR}/External/nvapi/amd64/nvapi64.lib
 )
 
 target_link_libraries(cuda_objects PRIVATE

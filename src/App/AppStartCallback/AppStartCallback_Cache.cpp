@@ -7,5 +7,5 @@ void AppStartCallback_Cache(App* pApp)
 {
 	LoadPatch(10, pApp->GetRenderer());
 
-	CUDA::Cache::TestCache();
+	CUDA::TestCache();
 }

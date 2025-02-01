@@ -84,7 +84,7 @@ void AppStartCallback_Clustering_Host(App* pApp)
 	map<size_t, Node*> quantizingMap;
 
 	PLYFormat ply;
-	ply.Deserialize("C:\\Resources\\3D\\PLY\\Complete\\Lower_pointcloud.ply");
+	ply.Deserialize("C:\\Resources\\3D\\PLY\\Complete\\Compound.ply");
 	
 	float voxelSize = 0.1f;
 	auto aabbMin = ply.GetAABBMin();
@@ -209,7 +209,7 @@ void AppStartCallback_Clustering_Host(App* pApp)
 		{
 			if (tagVoxelCount[kvp.second->tag] < 10000)
 			{
-				//VD::AddCube("cubes", position + Eigen::Vector3f(voxelSize * 0.5f, voxelSize * 0.5f, voxelSize * 0.5f), voxelSize * 0.5f, Color4::Red);
+				VD::AddCube("cubes", position + Eigen::Vector3f(voxelSize * 0.5f, voxelSize * 0.5f, voxelSize * 0.5f), voxelSize * 0.5f, Color4::Red);
 			}
 			else
 			{
@@ -233,4 +233,35 @@ void AppStartCallback_Clustering_Host(App* pApp)
 void AppStartCallback_Clustering(App* pApp)
 {
 	CUDA::Clustering::TestClustering();
+	//AppStartCallback_Clustering_Host(pApp);
+
+	{
+		FILE* fs;
+		fopen_s(&fs, "C:\\Debug\\GPV\\transform.bin", "rb");
+		float m[16];
+		fread(m, sizeof(float) * 16, 1, fs);
+		Eigen::Matrix4f transform(m);
+		fclose(fs);
+
+		auto camera = pApp->GetRenderer()->GetActiveCamera();
+
+		Eigen::Vector3f position = transform.block<3, 1>(0, 3);
+
+		// Extract direction (negative Z-axis of the camera in VTK)
+		Eigen::Vector3f direction = -transform.block<3, 1>(0, 2);
+
+		// Extract up vector (Y-axis of the matrix)
+		Eigen::Vector3f up = transform.block<3, 1>(0, 1);
+
+		// Set the camera parameters
+		camera->SetFocalPoint(position.x(), position.y(), position.z());
+		camera->SetPosition(
+			position.x() - direction.x() * 100.0f,
+			position.y() - direction.y() * 100.0f,
+			position.z() - direction.z() * 100.0f
+		);
+		camera->SetViewUp(up.x(), up.y(), up.z());
+
+		pApp->GetRenderWindow()->Render();
+	}
 }
