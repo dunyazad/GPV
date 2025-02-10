@@ -829,7 +829,7 @@ namespace CUDA
 			thrust::device_vector<Voxel> volume(dimensions.x * dimensions.y * dimensions.z);
 			auto d_volume = thrust::raw_pointer_cast(volume.data());
 
-			thrust::for_each(thrust::counting_iterator((size_t)0), thrust::counting_iterator(volume.size()),
+			thrust::for_each(thrust::counting_iterator<size_t>((size_t)0), thrust::counting_iterator<size_t>(volume.size()),
 				[=] __device__(size_t index) {
 				d_volume[index].minDistance = FLT_MAX;
 				d_volume[index].tsdfValue = FLT_MAX;
@@ -1055,7 +1055,7 @@ namespace CUDA
 			thrust::device_vector<Voxel> volume(dimensions.x * dimensions.y * dimensions.z);
 			auto d_volume = thrust::raw_pointer_cast(volume.data());
 
-			thrust::for_each(thrust::counting_iterator((size_t)0), thrust::counting_iterator(volume.size()),
+			thrust::for_each(thrust::counting_iterator<size_t>((size_t)0), thrust::counting_iterator<size_t>(volume.size()),
 				[=] __device__(size_t index) {
 				d_volume[index].minDistance = FLT_MAX;
 				d_volume[index].tsdfValue = FLT_MAX;

@@ -21,7 +21,11 @@ void TimerCallback::Execute(vtkObject* caller, unsigned long eventId, void* vtkN
 
 void TimerCallback::OnTimer()
 {
+	//Debugging::BeginFrame();
+
 	app->OnUpdate();
+
+	//Debugging::EndFrame();
 
 	VisualDebugging::Update();
 }
@@ -62,6 +66,8 @@ App::~App()
 
 void App::Run()
 {
+	//Debugging::Initialize();
+
 #ifdef _WINDOWS
 	if (configuration.maximizeConsoleWindow)
 	{
@@ -98,7 +104,7 @@ void App::Run()
 #ifdef _WINDOWS
 	if (configuration.maximizeRenderWindow)
 	{
-		MaximizeVTKWindowOnMonitor(renderWindow, 3);
+		MaximizeVTKWindowOnMonitor(renderWindow, 2);
 	}
 #endif
 
@@ -125,6 +131,7 @@ void App::Run()
 	interactor->Start();
 
 	VisualDebugging::Terminate();
+	//Debugging::Terminate();
 }
 
 void App::Run(AppConfiguration configuration)

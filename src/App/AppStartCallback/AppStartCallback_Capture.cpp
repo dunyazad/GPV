@@ -1,4 +1,5 @@
 #include <App/AppStartCallback/AppStartCallback.h>
+#include <App/ResourceIO.h>
 
 #include <Debugging/VisualDebugging.h>
 using VD = VisualDebugging;
@@ -69,7 +70,11 @@ void AppStartCallback_Capture(App* pApp)
 		//	return;
 		//}
 
-	LoadModel(renderer, "C:\\Resources\\3D\\PLY\\Complete\\Lower.ply");
+	auto modelFilePath = ResourceIO::GetPath("Debug/Maxillar.ply");
+	if (filesystem::exists(modelFilePath))
+	{
+		LoadModel(renderer, modelFilePath.string());
+	}
 
 	auto camera = renderer->GetActiveCamera();
 	camera->SetParallelProjection(true);
@@ -79,7 +84,9 @@ void AppStartCallback_Capture(App* pApp)
 	// 480 * 0.1 / 2 = 24
 	camera->SetParallelScale(24);
 
-	LoadTRNFile();
+	//LoadTRNFile();
+
+	cameraTransforms = ResourceIO::ReadTransformsFile(ResourceIO::GetPath("Debug/maxillar_transforms.bin"));
 
 	//LoadDepthImage();
 

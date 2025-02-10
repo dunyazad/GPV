@@ -46,6 +46,7 @@ set(cuda_source_list
     src/CUDA/CUDA_Test.cu
 
     src/CUDA/CUDA_Common.cuh
+    src/CUDA/CUDA_Common.cu
     src/CUDA/CUDA.cuh
     src/CUDA/CUDA.cu
     src/CUDA/Cache.cuh
@@ -66,6 +67,8 @@ set(cuda_source_list
     src/CUDA/PSR.cu
     src/CUDA/RegularGrid.cuh
     src/CUDA/RegularGrid.cu
+    src/CUDA/RegularGrid_OLD.cuh
+    src/CUDA/RegularGrid_OLD.cu
     src/CUDA/SVO.cuh
     src/CUDA/SVO.cu
     src/CUDA/ZSparseBlocks.cuh
@@ -87,6 +90,8 @@ set(source_list
     src/App/AppEventHandlers.cpp
     src/App/CustomTrackballStyle.h
     src/App/CustomTrackballStyle.cpp
+    src/App/ResourceIO.h
+    src/App/ResourceIO.cpp
     src/App/Serialization.hpp
     src/App/AppStartCallback/AppStartCallback.h
     src/App/AppStartCallback/AppStartCallback.cpp
@@ -102,6 +107,7 @@ set(source_list
     src/App/AppStartCallback/AppStartCallback_Patches.cpp
     src/App/AppStartCallback/AppStartCallback_PSR.cpp
     src/App/AppStartCallback/AppStartCallback_RegularGrid.cpp
+    src/App/AppStartCallback/AppStartCallback_RegularGrid_OLD.cpp
     src/App/AppStartCallback/AppStartCallback_SaveTRN.cpp
     src/App/AppStartCallback/AppStartCallback_ShrinkPatch.cpp
     src/App/AppStartCallback/AppStartCallback_Simple.cpp
@@ -217,3 +223,18 @@ endfunction(assign_source_group)
 
 assign_source_group(${cuda_source_list})
 assign_source_group(${source_list})
+
+
+
+
+# 실행 파일의 기본 출력 디렉토리 설정
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
+
+# 각 빌드 타입별로 별도 디렉토리 설정
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_SOURCE_DIR}/bin/Debug)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_SOURCE_DIR}/bin/Release)
+
+# Visual Studio에서 작업 디렉토리 설정
+set_target_properties(${PROJECT_NAME} PROPERTIES
+    VS_DEBUGGER_WORKING_DIRECTORY "$<IF:$<CONFIG:Debug>,${CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG},${CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE}>"
+)

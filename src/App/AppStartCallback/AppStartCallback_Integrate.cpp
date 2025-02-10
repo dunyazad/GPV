@@ -179,7 +179,7 @@ void AppStartCallback_Integrate(App* pApp)
 	uint3 volumeDimension = make_uint3(volumeDimensionX, volumeDimensionY, volumeDimensionZ);
 
 	CUDA::cuCache::Voxel* volume;
-	cudaMallocManaged(&volume, sizeof(CUDA::RegularGrid::Voxel) * volumeDimensionX * volumeDimensionY * volumeDimensionZ);
+	cudaMallocManaged(&volume, sizeof(CUDA::RegularGrid_OLD::Voxel) * volumeDimensionX * volumeDimensionY * volumeDimensionZ);
 	cudaDeviceSynchronize();
 
 	Eigen::Vector3f* inputPoints = nullptr;
@@ -354,7 +354,7 @@ void AppStartCallback_Integrate(App* pApp)
 
 		CUDA::cuCache::ExtractSurfacePoints(volume, volumeDimension, voxelSize, aabb.min(), resultPoints, numberOfResultPoints);
 
-		cudaFree(volume);
+		//cudaFree(volume);
 
 		cudaDeviceSynchronize();
 
@@ -383,13 +383,15 @@ void AppStartCallback_Integrate(App* pApp)
 			VD::AddCube("ResultPoints", p.position, { 0.1f, 0.1f, 0.1f }, {0.0f, 0.0f, 1.0f}, c);
 		}
 
-		ply.Serialize("C:\\Resources\\Debug\\Temp.ply");
+		//ply.Serialize("C:\\Resources\\Debug\\Temp.ply");
 
 
 		cudaFree(resultPoints);
 		cudaFree(numberOfResultPoints);
 
 		cudaDeviceSynchronize();
+
+		return;
 
 		t = Time::Now();
 		for (size_t i = 0; i < volumeDimensionX * volumeDimensionY * volumeDimensionZ; i++)

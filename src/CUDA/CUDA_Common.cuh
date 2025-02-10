@@ -1,17 +1,10 @@
 #pragma once
 
-#include <assert.h>
-#include <cmath>
-#include <stdio.h>
-#include <iostream>
-#include <stack>
-#include <vector>
-#include <tuple>
-
 #include <cuda_runtime.h>
+#include <device_atomic_functions.h>
+#include <device_launch_parameters.h>
 #include <curand_kernel.h>
 #include <cooperative_groups.h>
-#include <device_launch_parameters.h>
 #include <vector_types.h>
 #include <nvtx3/nvToolsExt.h>
 
@@ -52,9 +45,23 @@
 #include <thrust/tuple.h>
 #include <thrust/unique.h>
 
+#include <assert.h>
+#include <cmath>
+#include <iostream>
+#include <map>
+#include <sstream>
+#include <stack>
+#include <stdio.h>
+#include <string>
+#include <tuple>
+#include <vector>
+
+#include <Eigen/Core>
 #include <Eigen/Dense>
-#include <Eigen/Sparse>
+#include <Eigen/Geometry>
 #include <Eigen/IterativeLinearSolvers>
+#include <Eigen/LU>
+#include <Eigen/Sparse>
 
 #define alog(...) printf("\033[38;5;1m\033[48;5;15m(^(OO)^) /V/\033[0m\t" __VA_ARGS__)
 #define alogt(tag, ...) printf("\033[38;5;1m\033[48;5;15m [%d] (^(OO)^) /V/\033[0m\t" tag, __VA_ARGS__)
@@ -546,6 +553,56 @@ const int triTable[256][16] =
 {0, 3, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
 {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1} };
 
+/*
+struct Point
+{
+    enum PointType { P, PN, PC, PNC };
 
+    int tag;
+    PointType pointType = P;
+    float x;
+    float y;
+    float z;
+    float nx;
+    float ny;
+    float nz;
+    float r;
+    float g;
+    float b;
+};
 
-#define qDebug() std::cout
+class Debugging
+{
+public:
+    static void Initialize(); 
+    static void Terminate();
+    static void BeginFrame();
+    static void EndFrame();
+    static void CaptureOneFrame();
+    static void Flush();
+    static void StartRecording();
+    static void EndRecording();
+    static void ToggleRecording();
+
+    static bool captureOneFrame;
+    static bool recording;
+    static std::map<int, std::string> tagNameMapping;
+
+    __device__ static int IsCaptureEnabled();
+
+    __device__ static void AddPointP(int tag, const float3& point);
+    __device__ static void AddPointPN(int tag, const float3& point, const float3& normal);
+    __device__ static void AddPointPC(int tag, const float3& point, const float3& color);
+    __device__ static void AddPointPNC(int tag, const float3& point, const float3& normal, const float3& color);
+
+    static void SerializePoints(
+        float3* inputPoints,
+        float3* inputNormals,
+        uint3* inputColors, size_t numberOfInputPoints,
+        const std::string& tagName);
+
+    static void SetTagName(int tag, const std::string& name);
+
+    //static Eigen::Matrix4f transform;
+};
+*/

@@ -13,6 +13,7 @@
 #include <CUDA/Octree.cuh>
 #include <CUDA/PSR.cuh>
 #include <CUDA/RegularGrid.cuh>
+#include <CUDA/RegularGrid_OLD.cuh>
 #include <CUDA/SVO.cuh>
 #include <CUDA/ZSparseBlocks.cuh>
 

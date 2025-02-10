@@ -12,26 +12,53 @@ namespace CUDA
 {
 	namespace RegularGrid
 	{
+        struct Voxel
+        {
+            float tsdfValue = FLT_MAX;
+            float weight = 1.0f;
+            float3 normal = make_float3(0.0f, 0.0f, 0.0f);
+            float3 color = make_float3(1.0f, 1.0f, 1.0f);
+        };
+
         struct RegularGrid
         {
             float3 globalMinPosition = make_float3(0.0f, 0.0f, 0.0f);
             dim3 dimensions = dim3(400, 400, 400);
             float voxelSize = 0.1f;
-            cudaArray* d_voxels = nullptr;
-            cudaSurfaceObject_t surfaceObject;
+            cudaArray* d_voxels1 = nullptr;
+            cudaArray* d_voxels2 = nullptr;
+            cudaSurfaceObject_t surfaceObject1;
+            cudaSurfaceObject_t surfaceObject2;
         };
 
         void InitializeRegularGrid(RegularGrid* regularGrid)
         {
-            cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc(32, 0, 0, 0, cudaChannelFormatKindFloat);
+            cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat);
             cudaExtent volumeSize = make_cudaExtent(regularGrid->dimensions.x, regularGrid->dimensions.y, regularGrid->dimensions.z);
 
-            checkCudaErrors(cudaMalloc3DArray(&regularGrid->d_voxels, &channelDesc, volumeSize, cudaArraySurfaceLoadStore));
+            checkCudaErrors(cudaMalloc3DArray(&regularGrid->d_voxels1, &channelDesc, volumeSize, cudaArraySurfaceLoadStore));
+            checkCudaErrors(cudaMalloc3DArray(&regularGrid->d_voxels2, &channelDesc, volumeSize, cudaArraySurfaceLoadStore));
 
-            struct cudaResourceDesc resDesc = {};
-            resDesc.resType = cudaResourceTypeArray;
-            resDesc.res.array.array = regularGrid->d_voxels;
-            checkCudaErrors(cudaCreateSurfaceObject(&regularGrid->surfaceObject, &resDesc));
+            struct cudaResourceDesc resDesc1 = {};
+            resDesc1.resType = cudaResourceTypeArray;
+            resDesc1.res.array.array = regularGrid->d_voxels1;
+            checkCudaErrors(cudaCreateSurfaceObject(&regularGrid->surfaceObject1, &resDesc1));
+
+            struct cudaResourceDesc resDesc2 = {};
+            resDesc2.resType = cudaResourceTypeArray;
+            resDesc2.res.array.array = regularGrid->d_voxels2;
+            checkCudaErrors(cudaCreateSurfaceObject(&regularGrid->surfaceObject2, &resDesc2));
+        }
+
+        __device__ float AtomicMinFloat(float* addr, float value)
+        {
+            int* addr_as_int = (int*)addr;
+            int old = *addr_as_int, assumed;
+            do {
+                assumed = old;
+                old = atomicCAS(addr_as_int, assumed, __float_as_int(fminf(value, __int_as_float(assumed))));
+            } while (assumed != old);
+            return __int_as_float(old);
         }
 
         __global__ void Kernel_ClearCache(RegularGrid regularGrid)
@@ -39,18 +66,26 @@ namespace CUDA
             int idx = blockIdx.x * blockDim.x + threadIdx.x;
             if (idx >= regularGrid.dimensions.x * regularGrid.dimensions.y * regularGrid.dimensions.z) return;
 
-            int zIndex = (idx / (regularGrid.dimensions.x * regularGrid.dimensions.y));
+            int zIndex = idx / (regularGrid.dimensions.x * regularGrid.dimensions.y);
             int yIndex = (idx % (regularGrid.dimensions.x * regularGrid.dimensions.y)) / regularGrid.dimensions.x;
-            int xIndex = (idx % (regularGrid.dimensions.x * regularGrid.dimensions.y)) % regularGrid.dimensions.x;
+            int xIndex = idx % regularGrid.dimensions.x;
 
             if (xIndex < 0 || xIndex >= regularGrid.dimensions.x ||
                 yIndex < 0 || yIndex >= regularGrid.dimensions.y ||
                 zIndex < 0 || zIndex >= regularGrid.dimensions.z)
                 return;
 
-            float tsdf = FLT_MAX;
+            Voxel voxel;
+            voxel.tsdfValue = FLT_MAX;
+            voxel.weight = 1.0f;
+            voxel.normal = make_float3(0.0f, 0.0f, 0.0f);
+            voxel.color = make_float3(1.0f, 1.0f, 1.0f);
 
-            surf3Dwrite<float>(tsdf, regularGrid.surfaceObject, xIndex * sizeof(float), yIndex, zIndex);
+            float4 data1 = make_float4(voxel.tsdfValue, voxel.weight, voxel.normal.x, voxel.normal.y);
+            float4 data2 = make_float4(voxel.normal.z, voxel.color.x, voxel.color.y, voxel.color.z);
+
+            surf3Dwrite(data1, regularGrid.surfaceObject1, xIndex * sizeof(float4), yIndex, zIndex);
+            surf3Dwrite(data2, regularGrid.surfaceObject2, xIndex * sizeof(float4), yIndex, zIndex);
         }
 
         __global__ void Kernel_IntegrateInputPoints(RegularGrid regularGrid, Eigen::Vector3f* inputPoints, unsigned int numberOfInputPoints)
@@ -75,53 +110,131 @@ namespace CUDA
                 regularGrid.globalMinPosition.y + yIndex * regularGrid.voxelSize + 0.5f * regularGrid.voxelSize,
                 regularGrid.globalMinPosition.z + zIndex * regularGrid.voxelSize + 0.5f * regularGrid.voxelSize);
 
-            //Debugging::AddPointP(0, p);
-            //Debugging::AddPointP(1, vp);
+            float4 data1 = surf3Dread<float4>(regularGrid.surfaceObject1, xIndex * sizeof(float4), yIndex, zIndex);
+            float4 data2 = surf3Dread<float4>(regularGrid.surfaceObject2, xIndex * sizeof(float4), yIndex, zIndex);
 
-            float tsdf = vp.z - p.z;
-            printf("tsdf : %f\n", tsdf);
-            float oldTSDF = surf3Dread<float>(regularGrid.surfaceObject, xIndex * sizeof(float), yIndex, zIndex);
-            if (oldTSDF > 100000.0f)
-                oldTSDF = 100.0f;
-            tsdf = oldTSDF < tsdf ? oldTSDF : tsdf;
+            //printf("%f, %f, %f\n", vp.x, vp.y, vp.z);
 
-            surf3Dwrite<float>(tsdf, regularGrid.surfaceObject, xIndex * sizeof(float), yIndex, zIndex);
+            Voxel voxel;
+            voxel.tsdfValue = data1.x;
+            voxel.weight = data1.y;
+            voxel.normal = make_float3(data1.z, data1.w, data2.x);
+            voxel.color = make_float3(data2.y, data2.z, data2.w);
 
-            int offset = 5;
+
+
+            float3 voxelCenter = make_float3(
+                regularGrid.globalMinPosition.x + xIndex * regularGrid.voxelSize + 0.5f * regularGrid.voxelSize,
+                regularGrid.globalMinPosition.y + yIndex * regularGrid.voxelSize + 0.5f * regularGrid.voxelSize,
+                regularGrid.globalMinPosition.z + zIndex * regularGrid.voxelSize + 0.5f * regularGrid.voxelSize);
+
+            float distance = length(voxelCenter - p);
+            float truncation = 1.0f;
+            float newTSDF = fmaxf(-truncation, fminf(distance / truncation, truncation));
+            newTSDF = (dot(voxelCenter - p, voxel.normal) >= 0.0f) ? newTSDF : -newTSDF;
+
+            if (FLT_MAX == voxel.tsdfValue)
+            {
+                voxel.tsdfValue = newTSDF;
+            }
+            else
+            {
+                voxel.tsdfValue = (voxel.tsdfValue * voxel.weight + newTSDF) / (voxel.weight + 1.0f);
+            }
+            voxel.weight += 1.0f;
+            
+            //Voxel voxel;
+            //voxel.tsdfValue = 1.0f;
+            //voxel.weight = 1.0f;
+            //voxel.normal = make_float3(1.0f, 0.0f, 0.0f);
+            //voxel.color = make_float3(1.0f, 0.0f, 0.0f);
+            
+            data1 = make_float4(voxel.tsdfValue, voxel.weight, voxel.normal.x, voxel.normal.y);
+            data2 = make_float4(voxel.normal.z, voxel.color.x, voxel.color.y, voxel.color.z);
+
+            surf3Dwrite(data1, regularGrid.surfaceObject1, xIndex * sizeof(float4), yIndex, zIndex);
+            surf3Dwrite(data2, regularGrid.surfaceObject2, xIndex * sizeof(float4), yIndex, zIndex);
+            
+            //printf("%f, %f, %f : %f\n", vp.x, vp.y, vp.z, voxel.tsdfValue);
+
+            int offset = 1;
 
             for (int zOffset = -offset; zOffset <= offset; zOffset++)
             {
-                int nzIndex = zIndex + zOffset;
                 if (zIndex + zOffset < 0 || zIndex + zOffset >= regularGrid.dimensions.z) continue;
 
                 for (int yOffset = -offset; yOffset <= offset; yOffset++)
                 {
-                    int nyIndex = yIndex + yOffset;
                     if (yIndex + yOffset < 0 || yIndex + yOffset >= regularGrid.dimensions.y) continue;
 
                     for (int xOffset = -offset; xOffset <= offset; xOffset++)
                     {
-                        int nxIndex = xIndex + xOffset;
                         if (xIndex + xOffset < 0 || xIndex + xOffset >= regularGrid.dimensions.x) continue;
                         if (0 == xOffset && 0 == yOffset && 0 == zOffset) continue;
+
+                        int nxIndex = xIndex + xOffset;
+                        int nyIndex = yIndex + yOffset;
+                        int nzIndex = zIndex + zOffset;
 
                         if (nxIndex < 0 || nxIndex >= regularGrid.dimensions.x ||
                             nyIndex < 0 || nyIndex >= regularGrid.dimensions.y ||
                             nzIndex < 0 || nzIndex >= regularGrid.dimensions.z)
                             return;
 
-                        auto np = vp + make_float3(
-                            (float)xOffset * regularGrid.voxelSize,
-                            (float)yOffset * regularGrid.voxelSize,
-                            (float)zOffset * regularGrid.voxelSize);
+                        float3 nvp = make_float3(
+                            regularGrid.globalMinPosition.x + nxIndex * regularGrid.voxelSize + 0.5f * regularGrid.voxelSize,
+                            regularGrid.globalMinPosition.y + nyIndex * regularGrid.voxelSize + 0.5f * regularGrid.voxelSize,
+                            regularGrid.globalMinPosition.z + nzIndex * regularGrid.voxelSize + 0.5f * regularGrid.voxelSize);
 
-                        float ntsdf = np.z - p.z;
+                        float4 ndata1 = surf3Dread<float4>(regularGrid.surfaceObject1, nxIndex * sizeof(float4), nyIndex, nzIndex);
+                        float4 ndata2 = surf3Dread<float4>(regularGrid.surfaceObject2, nxIndex * sizeof(float4), nyIndex, nzIndex);
 
-                        float oldNTSDF = surf3Dread<float>(regularGrid.surfaceObject, (xIndex + xOffset) * sizeof(float), yIndex + yOffset, zIndex + zOffset);
-                        if (oldNTSDF > 100000.0f)
-                            oldNTSDF = 100.0f;
-                        ntsdf = oldNTSDF < ntsdf ? oldNTSDF : ntsdf;
-                        surf3Dwrite<float>(ntsdf, regularGrid.surfaceObject, (xIndex + xOffset) * sizeof(float), yIndex + yOffset, zIndex + zOffset);
+                        Voxel nvoxel;
+                        nvoxel.tsdfValue = ndata1.x;
+                        nvoxel.weight = ndata1.y;
+                        nvoxel.normal = make_float3(ndata1.z, ndata1.w, ndata2.x);
+                        nvoxel.color = make_float3(ndata2.y, ndata2.z, ndata2.w);
+
+                        float ndx = nvp.x - p.x;
+                        float ndy = nvp.y - p.y;
+                        float ndz = nvp.z - p.z;
+
+                        float ndistance = sqrtf(ndx * ndx + ndy * ndy + ndz * ndz);
+
+                        float truncation = 1.0f;
+                        float newTSDF = fmaxf(-truncation, fminf(ndistance / truncation, truncation));
+
+                        //printf("newTSDF write: %f %f %f -> %f\n", nvp.x, nvp.y, nvp.z, newTSDF);
+
+                        if (FLT_MAX == nvoxel.tsdfValue)
+                        {
+                            nvoxel.tsdfValue = newTSDF;
+                        }
+                        else
+                        {
+                            nvoxel.tsdfValue = (nvoxel.tsdfValue * nvoxel.weight + newTSDF) / (nvoxel.weight + 1.0f);
+                        }
+
+                        //printf("voxel.tsdfValue write: %f %f %f -> %f\n", nvp.x, nvp.y, nvp.z, voxel.tsdfValue);
+
+                        nvoxel.weight += 1.0f;
+
+                        //Voxel voxel;
+                        //voxel.tsdfValue = 1.0f;
+                        //voxel.weight = 1.0f;
+                        //voxel.normal = make_float3(1.0f, 0.0f, 0.0f);
+                        //voxel.color = make_float3(1.0f, 0.0f, 0.0f);
+
+                        ndata1 = make_float4(nvoxel.tsdfValue, nvoxel.weight, nvoxel.normal.x, nvoxel.normal.y);
+                        ndata2 = make_float4(nvoxel.normal.z, nvoxel.color.x, nvoxel.color.y, nvoxel.color.z);
+
+                        //surf3Dwrite(ndata1, regularGrid.surfaceObject1, nxIndex * sizeof(float4), nyIndex, nzIndex);
+                        //surf3Dwrite(ndata2, regularGrid.surfaceObject2, nxIndex * sizeof(float4), nyIndex, nzIndex);
+
+                        //printf("Before write: %f %f %f -> %f\n", nvp.x, nvp.y, nvp.z, nvoxel.tsdfValue);
+                        surf3Dwrite(ndata1, regularGrid.surfaceObject1, nxIndex * sizeof(float4), nyIndex, nzIndex);
+                        surf3Dwrite(ndata2, regularGrid.surfaceObject2, nxIndex * sizeof(float4), nyIndex, nzIndex);
+                        //printf("After write: %f %f %f -> %f\n", nvp.x, nvp.y, nvp.z, nvoxel.tsdfValue);
                     }
                 }
             }
@@ -136,17 +249,21 @@ namespace CUDA
             int yIndex = (idx % (regularGrid.dimensions.x * regularGrid.dimensions.y)) / regularGrid.dimensions.x;
             int xIndex = (idx % (regularGrid.dimensions.x * regularGrid.dimensions.y)) % regularGrid.dimensions.x;
 
-            float tsdf = surf3Dread<float>(regularGrid.surfaceObject, xIndex * sizeof(float), yIndex, zIndex);
+            float4 data1 = surf3Dread<float4>(regularGrid.surfaceObject1, xIndex * sizeof(float4), yIndex, zIndex);
+            float4 data2 = surf3Dread<float4>(regularGrid.surfaceObject2, xIndex * sizeof(float4), yIndex, zIndex);
 
+            Voxel voxel;
+            voxel.tsdfValue = data1.x;
+            voxel.weight = data1.y;
+            voxel.normal = make_float3(data1.z, data1.w, data2.x);
+            voxel.color = make_float3(data2.y, data2.z, data2.w);
+
+            if (voxel.tsdfValue != FLT_MAX)
             {
-                if (1000000.0f > tsdf && -1000000.0f < tsdf)
+                //if (-0.05f <= voxel.tsdfValue && voxel.tsdfValue <= 0.05f)
                 {
                     //if (0 > voxel.tsdfValue)
-                    //if(FLT_MAX != tsdf || 0.0f != tsdf)
-                    if (-1.5f / regularGrid.voxelSize <= tsdf && tsdf <= 1.5f / regularGrid.voxelSize)
                     {
-                        //printf("tsdf : %f\n", tsdf);
-
                         float x = xIndex * regularGrid.voxelSize + regularGrid.globalMinPosition.x;
                         float y = yIndex * regularGrid.voxelSize + regularGrid.globalMinPosition.y;
                         float z = zIndex * regularGrid.voxelSize + regularGrid.globalMinPosition.z;
@@ -194,7 +311,7 @@ namespace CUDA
                 VD::AddSphere("points", p, 0.05f);
             }
 
-            uint32_t numberOfInputPoints = inputPoints.size();
+            ui32 numberOfInputPoints = inputPoints.size();
 
 
 

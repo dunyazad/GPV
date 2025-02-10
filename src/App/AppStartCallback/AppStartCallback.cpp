@@ -187,7 +187,7 @@ void SaveTRNFile(int from, int to)
 	ofstream ofs;
 	ofs.open("C:\\Debug\\Patches\\transforms.trn", ios::out | ios::binary);
 
-	int numberOfTransforms = 526;
+	int numberOfTransforms = 6256;
 	if (to > from) numberOfTransforms = to - from;
 	ofs.write((char*)&numberOfTransforms, sizeof(int));
 
@@ -335,7 +335,7 @@ void CaptureNextFrame(App* pApp)
 
 	auto& tm = cameraTransforms[transformIndex];
 
-	MoveCamera(pApp, camera, tm);
+	MoveCamera(pApp, camera, tm.transpose());
 
 	//pApp->CaptureColorAndDepth("C:\\Resources\\2D\\Captured\\RGBD");
 	pApp->CaptureAsPointCloud("C:\\Resources\\2D\\Captured\\PointCloud");
@@ -399,7 +399,8 @@ bool AppStartCallback(App* pApp)
 	//AppStartCallback_Simple(pApp);
 
 	//AppStartCallback_Octree(pApp);
-	//AppStartCallback_RegularGrid(pApp);
+	//AppStartCallback_RegularGrid_OLD(pApp);
+	AppStartCallback_RegularGrid(pApp);
 	//AppStartCallback_SVO(pApp);
 	//AppStartCallback_HashMap(pApp);
 	//AppStartCallback_PSR(pApp);
@@ -409,7 +410,7 @@ bool AppStartCallback(App* pApp)
 	//AppStartCallback_Patches(pApp);
 	//AppStartCallback_HalfEdges(pApp);
 
-	AppStartCallback_Clustering(pApp);
+	//AppStartCallback_Clustering(pApp);
 	//AppStartCallback_ZSparseBlocks(pApp);
 
 	//AppStartCallback_ShrinkPatch(pApp);

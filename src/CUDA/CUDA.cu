@@ -1566,7 +1566,7 @@ namespace CUDA
 		{
 			if (globalHash_info_host == nullptr) return;
 
-			qDebug("ExtractVolume()");
+			alog("ExtractVolume()");
 
 			Eigen::Vector3f* zeroCrossingPositions = nullptr;
 			cudaMalloc(&zeroCrossingPositions, sizeof(Eigen::Vector3f) * globalHash_info_host->HashTableCapacity * 3);
@@ -1762,7 +1762,7 @@ namespace CUDA
 
 			checkCudaSync(st);
 
-			qDebug("host_numberOfZeroCrossingValues : %d", host_numberOfZeroCrossingValues);
+			alog("host_numberOfZeroCrossingValues : %d", host_numberOfZeroCrossingValues);
 
 			{
 				ExtractionVoxel* host_extractionVoxels = new ExtractionVoxel[globalHash_info_host->HashTableCapacity];
