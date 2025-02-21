@@ -994,9 +994,16 @@ public:
 			ss << "property float v" << endl;
 		}
 
-		if (indices.size() > 0)
+		if (lineIndices.size() > 0)
 		{
-			ss << "element face " << indices.size() / 3 << endl;
+			ss << "element enge " << lineIndices.size() / 2 << endl;
+			ss << "property int vertex1" << endl;
+			ss << "property int vertex2" << endl;
+		}
+
+		if (triangleIndices.size() > 0)
+		{
+			ss << "element face " << triangleIndices.size() / 3 << endl;
 			ss << "property list uchar int vertex_indices" << endl;
 		}
 
@@ -1060,20 +1067,20 @@ public:
 			}
 		}
 
-		if (indices.size() > 0)
+		if (triangleIndices.size() > 0)
 		{
-			for (size_t i = 0; i < indices.size() / 3; i++)
+			for (size_t i = 0; i < triangleIndices.size() / 3; i++)
 			{
-				auto i0 = indices[3 * i + 0];
-				auto i1 = indices[3 * i + 1];
-				auto i2 = indices[3 * i + 2];
+				auto i0 = triangleIndices[3 * i + 0];
+				auto i1 = triangleIndices[3 * i + 1];
+				auto i2 = triangleIndices[3 * i + 2];
 
 				ss << "3 " << i0 << " " << i1 << " " << i2 << endl;
 
 				if (0 == i % 10000 && i != 0)
 				{
-					auto percent = ((double)i / (double)(indices.size() / 3)) * 100.0;
-					printf("[%llu / %llu] %f percent\n", i, indices.size() / 3, percent);
+					auto percent = ((double)i / (double)(triangleIndices.size() / 3)) * 100.0;
+					printf("[%llu / %llu] %f percent\n", i, triangleIndices.size() / 3, percent);
 				}
 			}
 		}
@@ -1247,7 +1254,7 @@ public:
 					{
 						auto vi = atoi(words[k].c_str());
 						
-						AddIndex(vi);
+						AddTriangleIndex(vi);
 					}
 				}
 			}
@@ -1267,7 +1274,8 @@ public:
 	//}
 
 	inline const vector<float>& GetNormals() const { return normals; }
-	inline const vector<unsigned int>& GetIndices() const { return indices; }
+	inline const vector<unsigned int>& GetLineIndices() const { return lineIndices; }
+	inline const vector<unsigned int>& GetTriangleIndices() const { return triangleIndices; }
 	inline const vector<float>& GetColors() const { return colors; }
 	inline const vector<uint8_t>& GetMaterialIDs() const { return materialIDs; }
 	inline const vector<unsigned short>& GetStartPatchIDs() const { return startPatchIDs; }
@@ -1299,7 +1307,9 @@ public:
 		normals.push_back(normal[2]);
 	}
 
-	virtual inline void AddIndex(unsigned int index) { indices.push_back(index); }
+	virtual inline void AddLineIndex(unsigned int index) { lineIndices.push_back(index); }
+
+	virtual inline void AddTriangleIndex(unsigned int index) { triangleIndices.push_back(index); }
 
 	virtual inline void AddColor(float r, float g, float b)
 	{
@@ -1346,7 +1356,8 @@ public:
 protected:
 	vector<float> uvs;
 	vector<float> normals;
-	vector<unsigned int> indices;
+	vector<unsigned int> lineIndices;
+	vector<unsigned int> triangleIndices;
 	vector<float> colors;
 	vector<uint8_t> materialIDs;
 	vector<unsigned short> startPatchIDs;

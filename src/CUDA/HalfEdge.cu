@@ -127,11 +127,11 @@ namespace CUDA
 
 			map<pair<unsigned int, unsigned int>, int> edges;
 
-			for (size_t i = 0; i < ply.GetIndices().size() / 3; i++)
+			for (size_t i = 0; i < ply.GetTriangleIndices().size() / 3; i++)
 			{
-				auto i0 = ply.GetIndices()[i * 3];
-				auto i1 = ply.GetIndices()[i * 3 + 1];
-				auto i2 = ply.GetIndices()[i * 3 + 2];
+				auto i0 = ply.GetTriangleIndices()[i * 3];
+				auto i1 = ply.GetTriangleIndices()[i * 3 + 1];
+				auto i2 = ply.GetTriangleIndices()[i * 3 + 2];
 
 				auto v0x = ply.GetPoints()[i0 * 3];
 				auto v0y = ply.GetPoints()[i0 * 3 + 1];

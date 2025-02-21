@@ -130,3 +130,20 @@ Eigen::Matrix3f computeRotationMatrix(const Eigen::Vector3f& a, const Eigen::Vec
 
     return rotationMatrix;
 }
+
+Eigen::Matrix3f GetRotationMatrix(const Eigen::Vector3f& a, const Eigen::Vector3f& b) {
+    Eigen::Vector3f v = a.cross(b);
+    float c = a.dot(b);
+    float s = v.norm();
+
+    if (s == 0) {
+        if (c > 0) return Eigen::Matrix3f::Identity();
+        else return -Eigen::Matrix3f::Identity();
+    }
+
+    Eigen::Matrix3f Vx;
+    Vx << 0, -v.z(), v.y(), v.z(), 0, -v.x(), -v.y(), v.x(), 0;
+
+    Eigen::Matrix3f R = Eigen::Matrix3f::Identity() + Vx + (Vx * Vx) * ((1 - c) / (s * s));
+    return R;
+}

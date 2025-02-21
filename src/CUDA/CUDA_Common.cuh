@@ -63,6 +63,8 @@
 #include <Eigen/LU>
 #include <Eigen/Sparse>
 
+#include <App/ResourceIO.h>
+
 #define alog(...) printf("\033[38;5;1m\033[48;5;15m(^(OO)^) /V/\033[0m\t" __VA_ARGS__)
 #define alogt(tag, ...) printf("\033[38;5;1m\033[48;5;15m [%d] (^(OO)^) /V/\033[0m\t" tag, __VA_ARGS__)
 

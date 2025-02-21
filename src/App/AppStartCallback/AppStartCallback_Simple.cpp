@@ -1,200 +1,109 @@
 ﻿#include <App/AppStartCallback/AppStartCallback.h>
 
+#include <App/ResourceIO.h>
+
 #include <Debugging/VisualDebugging.h>
 using VD = VisualDebugging;
 
+struct SpatialIndex
+{
+    int x = 0;
+    int y = 0;
+    int z = 0;
+
+    bool operator==(const SpatialIndex& other) const {
+        return x == other.x && y == other.y && z == other.z;
+    }
+};
+
+namespace std {
+    template <>
+    struct hash<SpatialIndex> {
+        size_t operator()(const SpatialIndex& s) const {
+            return ((size_t)s.x * 73856093) ^ ((size_t)s.y * 19349663) ^ ((size_t)s.z * 83492791);
+        }
+    };
+}
+
+bool operator<(const SpatialIndex& a, const SpatialIndex& b)
+{
+	if (a.x != b.x) return a.x < b.x;
+	if (a.y != b.y) return a.y < b.y;
+	return a.z < b.z;
+}
+
 void AppStartCallback_Simple(App* pApp)
 {
-	auto renderer = pApp->GetRenderer();
-
-	VD::AddCube("Cubes", { -1.0f, -1.0f, -1.0f }, Color4::White);
-	VD::AddCube("Cubes", {  1.0f, -1.0f, -1.0f }, Color4::White);
-	VD::AddCube("Cubes", { -1.0f,  1.0f, -1.0f }, Color4::White);
-	VD::AddCube("Cubes", {  1.0f,  1.0f, -1.0f }, Color4::White);
-	VD::AddCube("Cubes", { -1.0f, -1.0f, 1.0f }, Color4::White);
-	VD::AddCube("Cubes", {  1.0f, -1.0f, 1.0f }, Color4::White);
-	VD::AddCube("Cubes", { -1.0f,  1.0f, 1.0f }, Color4::White);
-	VD::AddCube("Cubes", {  1.0f,  1.0f, 1.0f }, Color4::White);
-
-	//LoadModel(renderer, "C:\\Resources\\3D\\PLY\\Complete\\Lower.ply");
-
-	//VisualDebugging::AddLine("axes", { 0, 0, 0 }, { 100.0f, 0.0f, 0.0f }, Color4::Red);
-	//VisualDebugging::AddLine("axes", { 0, 0, 0 }, { 0.0f, 100.0f, 0.0f }, Color4::Green);
-	//VisualDebugging::AddLine("axes", { 0, 0, 0 }, { 0.0f, 0.0f, 100.0f }, Color4::Blue);
-
-	vtkNew<vtkPLYReader> reader;
-	reader->SetFileName("C:\\Resources\\3D\\PLY\\Complete\\Lower_pointcloud.ply");
-	//reader->SetFileName("./../../res/3D/Lower_pointcloud.ply");
-	reader->Update();
-
-	vtkPolyData* polyData = reader->GetOutput();
-
-	auto plyPoints = polyData->GetPoints();
-	float* rawPoints = static_cast<float*>(plyPoints->GetData()->GetVoidPointer(0));
-	vtkDataArray* plyNormals = polyData->GetPointData()->GetNormals();
-	float* rawNormals = static_cast<float*>(plyNormals->GetVoidPointer(0));
-	vtkUnsignedCharArray* plyColors = vtkUnsignedCharArray::SafeDownCast(polyData->GetPointData()->GetScalars());
-
-	static vector<Eigen::Vector3f> points;
-	static vector<Eigen::Vector3f> normals;
-	static vector<Color4> colors;
-
-	vector<unsigned int> pointIndices;
-
-	auto bounds = polyData->GetBounds();
-	Eigen::AlignedBox3f aabb(
-		Eigen::Vector3f{ (float)bounds[0], (float)bounds[2], (float)bounds[4] },
-		Eigen::Vector3f{ (float)bounds[1], (float)bounds[3], (float)bounds[5] });
-	Eigen::Vector3f center = aabb.center();
-
-	Eigen::Vector3f aabbDelta = aabb.max() - aabb.min() - center;
-	float axisMax = aabbDelta.x();
-	if (axisMax < aabbDelta.y()) axisMax = aabbDelta.y();
-	if (axisMax < aabbDelta.z()) axisMax = aabbDelta.z();
-
 	auto t = Time::Now();
 
-	//float voxelSize = 0.1f;
-	//float truncationDistance = 1.0f;
-	//float weight = 1.0f;
-	//vector<Voxel> volume;
-	//volume.resize(1000 * 1000 * 1000);
+	auto renderer = pApp->GetRenderer();
+	
+	float voxelSize = 0.1f;
+	std::mutex volumeMutex;
+	unordered_map<SpatialIndex, float> volume;
 
-	//t = Time::End(t, "Initialize volume");
+	PLYFormat ply;
+	ply.Deserialize(ResourceIO::GetPath("Debug/Patches/point_0.ply").string());
 
-	//for (size_t pi = 0; pi < plyPoints->GetNumberOfPoints(); pi++)
-	//{
-	//	pointIndices.push_back((unsigned int)pi);
+    t = Time::Now();
 
-	//	auto dp = plyPoints->GetPoint(pi);
-	//	auto normal = plyNormals->GetTuple(pi);
-	//	unsigned char color[3];
-	//	plyColors->GetTypedTuple(pi, color);
+    std::vector<float>& points = ply.GetPoints();
+    size_t numPoints = points.size() / 3;
 
-	//	Eigen::Vector3f point((float)dp[0] - center.x(), (float)dp[1] - center.y(), (float)dp[2] - center.z());
-	//	points.push_back(point);
-	//	Eigen::Vector3f pointNormal((float)normal[0], (float)normal[1], (float)normal[2]);
-	//	normals.push_back(pointNormal);
-	//	auto color4 = Color4(color[0], color[1], color[2], 255);
-	//	colors.push_back(color4);
-	//	Eigen::Vector3f pointColor((float)color4.x() / 255.0f, (float)color4.y() / 255.0f, (float)color4.z() / 255.0f);
+    int offset = 0; // Voxel 범위를 확장하는 정도
 
-	//	//VD::AddSphere("points",
-	//	//	point,
-	//	//	{ 0.1f,0.1f,0.1f },
-	//	//	{ 0.0f, 0.0f, 1.0f },
-	//	//	Color4(color[0], color[1], color[2], 255));
+#pragma omp parallel for
+    for (size_t i = 0; i < numPoints; i++)
+    {
+        auto x = points[i * 3];
+        auto y = points[i * 3 + 1];
+        auto z = points[i * 3 + 2];
 
-	//	int xIndex = (int)floorf((point.x() + 50.0f) / voxelSize);
-	//	int yIndex = (int)floorf((point.y() + 50.0f) / voxelSize);
-	//	int zIndex = (int)floorf((point.z() + 50.0f) / voxelSize);
+        auto xIndex = static_cast<int>(floorf(x / voxelSize));
+        auto yIndex = static_cast<int>(floorf(y / voxelSize));
+        auto zIndex = static_cast<int>(floorf(z / voxelSize));
 
-	//	for (int z = zIndex - 5; z <= zIndex + 5; z++)
-	//	{
-	//		for (int y = yIndex - 5; y <= yIndex + 5; y++)
-	//		{
-	//			for (int x = xIndex - 5; x <= xIndex + 5; x++)
-	//			{
-	//				size_t index = z * 1000 * 1000 + y * 1000 + x;
+        std::vector<SpatialIndex> localUpdates;
 
-	//				Eigen::Vector3f position((float)x* voxelSize - 50.0f, (float)y* voxelSize - 50.0f, (float)z* voxelSize - 50.0f);
-	//				float distance = (position - point).norm();
+        for (int zOffset = -offset; zOffset <= offset; zOffset++)
+        {
+            for (int yOffset = -offset; yOffset <= offset; yOffset++)
+            {
+                for (int xOffset = -offset; xOffset <= offset; xOffset++)
+                {
+                    localUpdates.push_back({ xIndex + xOffset, yIndex + yOffset, zIndex + zOffset });
+                }
+            }
+        }
 
-	//				float tsdfValue = 0.0f;
-	//				if (distance <= truncationDistance) {
-	//					tsdfValue = distance / truncationDistance;
-	//					if ((position - point).dot(point) < 0.0f) {
-	//						tsdfValue = -tsdfValue;
-	//					}
+        {
+            std::lock_guard<std::mutex> lock(volumeMutex);
+            for (const auto& key : localUpdates)
+            {
+                volume[key] = 1.0f;
+            }
+        }
+    }
+
+    t = Time::End(t, "Loading");
+
+    auto cameraPosition = Eigen::Vector3f(16.584496, -11.332185, 117.763481);
+
+	for (auto& kvp : volume)
+	{
+		auto x = (float)kvp.first.x * voxelSize;
+		auto y = (float)kvp.first.y * voxelSize;
+		auto z = (float)kvp.first.z * voxelSize;
+
+        auto p = Eigen::Vector3f(x, y, z);
+
+		VD::AddSphere("quantized points", p, 0.05f, Color4::White);
+	}
 
 
-	//					auto& voxel = volume[index];
-
-	//					float oldTSDF = voxel.tsdfValue;
-	//					if (FLT_MAX == oldTSDF)
-	//					{
-	//						voxel.tsdfValue = tsdfValue;
-	//						voxel.weight = 1.0f;
-	//						voxel.normal = pointNormal;
-	//						voxel.color = pointColor;
-	//					}
-	//					else
-	//					{
-	//						float oldWeight = voxel.weight;
-	//						float newTSDF = (oldTSDF * oldWeight + tsdfValue * weight) / (oldWeight + weight);
-	//						float newWeight = oldWeight + weight;
-	//						if (fabsf(newTSDF) < fabsf(oldTSDF))
-	//						{
-	//							voxel.tsdfValue = newTSDF;
-	//							voxel.weight = oldWeight + weight;
-
-	//							Eigen::Vector3f oldNormal = voxel.normal;
-	//							Eigen::Vector3f oldColor = voxel.color;
-	//							voxel.normal = (oldNormal + pointNormal) * 0.5f;
-	//							voxel.color = (oldColor + pointColor) * 0.5f;
-	//						}
-	//					}
-	//				}
-	//			}
-	//		}
-	//	}
-	//}
-
-	//t = Time::End(t, "Integrate points");
-
-	//for (size_t i = 0; i < volume.size(); i++)
-	//{
-	//	int zIndex = i / (1000 * 1000);
-	//	int yIndex = (i % (1000 * 1000)) / 1000;
-	//	int xIndex = (i % (1000 * 1000)) % 1000;
-
-	//	if (-0.05f < volume[i].tsdfValue && volume[i].tsdfValue < 0.05f)
-	//	{
-	//		Eigen::Vector3f position((float)xIndex * voxelSize, (float)yIndex * voxelSize, (float)zIndex * voxelSize);
-
-	//		Eigen::Vector3f c = volume[i].color.normalized();
-	//		Color4 c4(255, 255, 255, 255);
-
-	//		c4.FromNormalzed(c.x(), c.y(), c.z(), 1.0f);
-
-	//		VD::AddCube("voxel", { (float)xIndex * voxelSize - 50.0f, (float)yIndex * voxelSize - 50.0f, (float)zIndex * voxelSize - 50.0f }, 0.05f, c4);
-	//	}
-	//}
-
-	//auto mesh = GenerateMeshFromVolume(volume, 1000, 0.1f);
-
-	//printf("mesh.vertices : %llu\n", mesh.vertices.size());
-	//printf("mesh.indices : %llu\n", mesh.indices.size());
-	//printf("mesh.normals : %llu\n", mesh.normals.size());
-	//printf("mesh.colors : %llu\n", mesh.colors.size());
-
-	//for (size_t i = 0; i < mesh.indices.size() / 3; i++)
-	//{
-	//	auto& i0 = mesh.indices[i * 3];
-	//	auto& i1 = mesh.indices[i * 3 + 1];
-	//	auto& i2 = mesh.indices[i * 3 + 2];
-
-	//	auto& v0 = mesh.vertices[i * 3];
-	//	auto& v1 = mesh.vertices[i * 3 + 1];
-	//	auto& v2 = mesh.vertices[i * 3 + 2];
-
-	//	auto& n0 = mesh.normals[i * 3];
-	//	auto& n1 = mesh.normals[i * 3 + 1];
-	//	auto& n2 = mesh.normals[i * 3 + 2];
-
-	//	auto& c0 = mesh.colors[i * 3];
-	//	auto& c1 = mesh.colors[i * 3 + 1];
-	//	auto& c2 = mesh.colors[i * 3 + 2];
-
-	//	VD::AddTriangle("Mesh", v0, v1, v2, Color4::White);
-	//}
-
-	////VD::AddCube("AABC", { 0.0f, 0.0f, 0.0f }, axisMax * 0.5f, Color4::White);
-	////printf("axisMax : %f\n", axisMax);
-
-	VisualDebugging::AddLine("axes", { 0, 0, 0 }, { axisMax * 0.5f, 0.0f, 0.0f }, Color4::Red);
-	VisualDebugging::AddLine("axes", { 0, 0, 0 }, { 0.0f, axisMax * 0.5f, 0.0f }, Color4::Green);
-	VisualDebugging::AddLine("axes", { 0, 0, 0 }, { 0.0f, 0.0f, axisMax * 0.5f }, Color4::Blue);
+	VisualDebugging::AddLine("axes", { 0, 0, 0 }, { 100.0f, 0.0f, 0.0f }, Color4::Red);
+	VisualDebugging::AddLine("axes", { 0, 0, 0 }, { 0.0f, 100.0f, 0.0f }, Color4::Green);
+	VisualDebugging::AddLine("axes", { 0, 0, 0 }, { 0.0f, 0.0f, 100.0f }, Color4::Blue);
 
 	t = Time::End(t, "Visualize");
 }

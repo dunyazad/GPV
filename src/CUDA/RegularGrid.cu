@@ -71,15 +71,14 @@ namespace CUDA
                 return;
 
             float3 vp = make_float3(
-                regularGrid.globalMinPosition.x + xIndex * regularGrid.voxelSize + 0.5f * regularGrid.voxelSize,
-                regularGrid.globalMinPosition.y + yIndex * regularGrid.voxelSize + 0.5f * regularGrid.voxelSize,
-                regularGrid.globalMinPosition.z + zIndex * regularGrid.voxelSize + 0.5f * regularGrid.voxelSize);
+                regularGrid.globalMinPosition.x - (regularGrid.dimensions.x / 2) * regularGrid.voxelSize + xIndex * regularGrid.voxelSize + 0.5f * regularGrid.voxelSize,
+                regularGrid.globalMinPosition.y - (regularGrid.dimensions.y / 2) * regularGrid.voxelSize + yIndex * regularGrid.voxelSize + 0.5f * regularGrid.voxelSize,
+                regularGrid.globalMinPosition.z - (regularGrid.dimensions.z / 2) * regularGrid.voxelSize + zIndex * regularGrid.voxelSize + 0.5f * regularGrid.voxelSize);
 
             //Debugging::AddPointP(0, p);
             //Debugging::AddPointP(1, vp);
 
             float tsdf = vp.z - p.z;
-            printf("tsdf : %f\n", tsdf);
             float oldTSDF = surf3Dread<float>(regularGrid.surfaceObject, xIndex * sizeof(float), yIndex, zIndex);
             if (oldTSDF > 100000.0f)
                 oldTSDF = 100.0f;
@@ -87,7 +86,7 @@ namespace CUDA
 
             surf3Dwrite<float>(tsdf, regularGrid.surfaceObject, xIndex * sizeof(float), yIndex, zIndex);
 
-            int offset = 5;
+            int offset = 10;
 
             for (int zOffset = -offset; zOffset <= offset; zOffset++)
             {
@@ -143,7 +142,7 @@ namespace CUDA
                 {
                     //if (0 > voxel.tsdfValue)
                     //if(FLT_MAX != tsdf || 0.0f != tsdf)
-                    if (-1.5f / regularGrid.voxelSize <= tsdf && tsdf <= 1.5f / regularGrid.voxelSize)
+                    if (-0.05f <= tsdf && tsdf <= 0.05f)
                     {
                         //printf("tsdf : %f\n", tsdf);
 

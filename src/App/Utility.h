@@ -21,3 +21,4 @@ void MaximizeVTKWindowOnMonitor(vtkSmartPointer<vtkRenderWindow> renderWindow, i
 #endif
 
 Eigen::Matrix3f computeRotationMatrix(const Eigen::Vector3f& a, const Eigen::Vector3f& b);
+Eigen::Matrix3f GetRotationMatrix(const Eigen::Vector3f& a, const Eigen::Vector3f& b);

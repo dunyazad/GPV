@@ -11,8 +11,6 @@ int mode = 0;
 
 int main()
 {
-	vtkActor* planeActor = nullptr;
-
 	App app;
 	app.AddKeyPressCallback(OnKeyPress);
 	app.AddKeyReleaseCallback(OnKeyRelease);
@@ -36,50 +34,3 @@ int main()
 
 	return 0;
 }
-
-
-
-
-
-
-
-
-//
-////#define USE_CUDA
-////
-////#ifdef USE_CUDA
-////#include <CUDA/CUDA_Test.cuh>
-////#endif
-//
-//#include <Algorithm/MarchingCubes.hpp>
-//using namespace MarchingCubes;
-//
-//void Host_Test()
-//{
-////#ifndef USE_CUDA
-////	MarchingCubesSurfaceExtractor<float3> mc(
-////		nullptr,
-////		make_float3(-5.0f, -5.0f, -5.0f),
-////		make_float3(5.0f, 5.0f, 5.0f),
-////		0.1f,
-////		0.0f);
-////
-////	mc.Extract();
-////#endif
-//}
-//
-//void Device_Test()
-//{
-//#ifdef USE_CUDA
-////	CUDA_Test();
-//#endif
-//}
-//
-//int main()
-//{
-//	// MarchingCubesSurfaceExtractor
-//
-//	Host_Test();
-//
-//	Device_Test();
-//}

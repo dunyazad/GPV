@@ -781,9 +781,9 @@ namespace CUDA
 			for (size_t i = 0; i < result.numberOfTriangles; i++)
 			{
 				auto t = result.triangles[i];
-				ply.AddIndex(t.x);
-				ply.AddIndex(t.y);
-				ply.AddIndex(t.z);
+				ply.AddTriangleIndex(t.x);
+				ply.AddTriangleIndex(t.y);
+				ply.AddTriangleIndex(t.z);
 			}
 
 			ply.Serialize("C:\\Resources\\Debug\\TestSphere.ply");
@@ -986,9 +986,9 @@ namespace CUDA
 			for (size_t i = 0; i < result.numberOfTriangles; i++)
 			{
 				auto t = result.triangles[i];
-				ply.AddIndex(t.x);
-				ply.AddIndex(t.y);
-				ply.AddIndex(t.z);
+				ply.AddTriangleIndex(t.x);
+				ply.AddTriangleIndex(t.y);
+				ply.AddTriangleIndex(t.z);
 			}
 
 			ply.Serialize("C:\\Resources\\Debug\\Field.ply");
@@ -1190,9 +1190,9 @@ namespace CUDA
 				for (size_t i = 0; i < result.numberOfTriangles; i++)
 				{
 					auto t = result.triangles[i];
-					ply.AddIndex(t.x);
-					ply.AddIndex(t.y);
-					ply.AddIndex(t.z);
+					ply.AddTriangleIndex(t.x);
+					ply.AddTriangleIndex(t.y);
+					ply.AddTriangleIndex(t.z);
 				}
 
 				ply.Serialize("C:\\Resources\\Debug\\Field.ply");
@@ -1291,9 +1291,9 @@ namespace CUDA
 				for (size_t i = 0; i < result.numberOfTriangles; i++)
 				{
 					auto t = result.triangles[i];
-					ply.AddIndex(t.x);
-					ply.AddIndex(t.y);
-					ply.AddIndex(t.z);
+					ply.AddTriangleIndex(t.x);
+					ply.AddTriangleIndex(t.y);
+					ply.AddTriangleIndex(t.z);
 				}
 
 				ply.Serialize("C:\\Resources\\Debug\\Field.ply");

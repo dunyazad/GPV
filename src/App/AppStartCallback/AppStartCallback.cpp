@@ -386,6 +386,8 @@ void LoadDepthImage()
 
 bool AppStartCallback(App* pApp)
 {
+	//AppStartCallback_Simple(pApp);
+
 	//AppStartCallback_SaveTRN(pApp);
 	//AppStartCallback_Capture(pApp);
 
@@ -400,7 +402,7 @@ bool AppStartCallback(App* pApp)
 
 	//AppStartCallback_Octree(pApp);
 	//AppStartCallback_RegularGrid_OLD(pApp);
-	AppStartCallback_RegularGrid(pApp);
+	//AppStartCallback_RegularGrid(pApp);
 	//AppStartCallback_SVO(pApp);
 	//AppStartCallback_HashMap(pApp);
 	//AppStartCallback_PSR(pApp);
@@ -415,6 +417,10 @@ bool AppStartCallback(App* pApp)
 
 	//AppStartCallback_ShrinkPatch(pApp);
 	//AppStartCallback_Cache(pApp);
+
+	//AppStartCallback_Transform(pApp);
+
+	AppStartCallback_DSU(pApp);
 
 	return true;
 }
