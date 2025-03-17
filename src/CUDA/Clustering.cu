@@ -13,109 +13,6 @@ namespace CUDA
 {
 	namespace Clustering
 	{
-#define VOXEL_SIZE 0.1f
-#define GRID_SIZE 400 // 400x400x400 Voxel Grid
-
-        struct Point3D {
-            float x, y, z;
-            int label;  // 클러스터 ID
-        };
-
-        // CUDA 커널: Voxel Grid 매핑
-        __global__ void mapToVoxelGrid(Point3D* d_points, int* d_voxelGrid, int numPoints) {
-            int idx = blockIdx.x * blockDim.x + threadIdx.x;
-            if (idx >= numPoints) return;
-
-            // Voxel Index 계산
-            int vx = int(d_points[idx].x / VOXEL_SIZE);
-            int vy = int(d_points[idx].y / VOXEL_SIZE);
-            int vz = int(d_points[idx].z / VOXEL_SIZE);
-
-            int voxelIndex = vx + vy * GRID_SIZE + vz * GRID_SIZE * GRID_SIZE;
-            d_voxelGrid[idx] = voxelIndex;
-        }
-
-        // CUDA 커널: Union-Find 초기화
-        __global__ void initLabels(int* d_labels, int numPoints) {
-            int idx = blockIdx.x * blockDim.x + threadIdx.x;
-            if (idx < numPoints) {
-                d_labels[idx] = idx;  // 초기에는 자기 자신을 루트로 설정
-            }
-        }
-
-        // CUDA 커널: Find 함수 (경로 압축 적용)
-        __device__ int find(int* labels, int i) {
-            while (labels[i] != i) {
-                labels[i] = labels[labels[i]]; // 경로 압축
-                i = labels[i];
-            }
-            return i;
-        }
-
-        // CUDA 커널: Union-Find 병합
-        __global__ void unionFind(int* d_labels, int* d_voxelGrid, int numPoints) {
-            int idx = blockIdx.x * blockDim.x + threadIdx.x;
-            if (idx >= numPoints) return;
-
-            int root1 = find(d_labels, idx);
-
-            // 인접 Voxel 확인 (6-방향 연결)
-            for (int i = 0; i < numPoints; i++) {
-                if (idx != i && d_voxelGrid[idx] == d_voxelGrid[i]) {
-                    int root2 = find(d_labels, i);
-                    if (root1 != root2) {
-                        d_labels[root2] = root1; // 병합
-                    }
-                }
-            }
-        }
-
-        // CPU에서 실행하는 코드
-        void connectedComponentLabelingCUDA(std::vector<Point3D>& points) {
-            int numPoints = points.size();
-
-            // CUDA 메모리 할당
-            Point3D* d_points;
-            int* d_voxelGrid;
-            int* d_labels;
-
-            cudaMalloc(&d_points, numPoints * sizeof(Point3D));
-            cudaMalloc(&d_voxelGrid, numPoints * sizeof(int));
-            cudaMalloc(&d_labels, numPoints * sizeof(int));
-
-            // 데이터 복사 (CPU → GPU)
-            cudaMemcpy(d_points, points.data(), numPoints * sizeof(Point3D), cudaMemcpyHostToDevice);
-
-            int blockSize = 256;
-            int gridSize = (numPoints + blockSize - 1) / blockSize;
-
-            // Voxel Grid 매핑
-            mapToVoxelGrid << <gridSize, blockSize >> > (d_points, d_voxelGrid, numPoints);
-            cudaDeviceSynchronize();
-
-            // Union-Find 초기화
-            initLabels << <gridSize, blockSize >> > (d_labels, numPoints);
-            cudaDeviceSynchronize();
-
-            // Union-Find 병합
-            unionFind << <gridSize, blockSize >> > (d_labels, d_voxelGrid, numPoints);
-            cudaDeviceSynchronize();
-
-            // 결과 복사 (GPU → CPU)
-            std::vector<int> labels(numPoints);
-            cudaMemcpy(labels.data(), d_labels, numPoints * sizeof(int), cudaMemcpyDeviceToHost);
-
-            // GPU 메모리 해제
-            cudaFree(d_points);
-            cudaFree(d_voxelGrid);
-            cudaFree(d_labels);
-
-            // 클러스터 ID 적용
-            for (size_t i = 0; i < points.size(); i++) {
-                points[i].label = labels[i];
-            }
-        }
-
         struct Voxel
         {
             float3 position;
@@ -131,10 +28,10 @@ namespace CUDA
             float3 volumeCenter)
         {
             unsigned int threadid = blockIdx.x * blockDim.x + threadIdx.x;
-            if (threadid > volumeDimensions.x * volumeDimensions.y * volumeDimensions.z - 1) return;
+            if (threadid >= volumeDimensions.x * volumeDimensions.y * volumeDimensions.z) return;
 
             d_voxels[threadid].position = make_float3(FLT_MAX, FLT_MAX, FLT_MAX);
-            d_voxels[threadid].label = UINT32_MAX;
+            d_voxels[threadid].label = threadid;
         }
 
         void ClearVoxels(
@@ -163,7 +60,7 @@ namespace CUDA
             unsigned int* numberOfOccupiedVoxelIndices)
         {
             unsigned int threadid = blockIdx.x * blockDim.x + threadIdx.x;
-            if (threadid > numberOfPoints - 1) return;
+            if (threadid >= numberOfPoints) return;
 
             auto gx = d_points[threadid * 3];
             auto gy = d_points[threadid * 3 + 1];
@@ -188,11 +85,13 @@ namespace CUDA
             voxel.position.x = volumeMin.x + ix * voxelSize;
             voxel.position.y = volumeMin.y + iy * voxelSize;
             voxel.position.z = volumeMin.z + iz * voxelSize;
+            voxel.label = volumeIndex;
 
-            voxel.label = threadid;
+            //alog("%f, %f, %f\n", voxel.position.x, voxel.position.y, voxel.position.z);
 
             auto index = atomicAdd(numberOfOccupiedVoxelIndices, 1);
             occupiedVoxelIndices[index] = dim3(ix, iy, iz);
+            //alog("%d\n", index);
         }
 
         void OccupyVoxels(
@@ -223,60 +122,137 @@ namespace CUDA
                 numberOfOccupiedVoxelIndices);
         }
 
-        __device__ int findRoot(int* labels, int i)
+        __device__ __forceinline__ unsigned int FindRoot(Voxel* d_voxels, unsigned int index)
         {
-            while (labels[i] != i)
+            while (d_voxels[index].label != index)
             {
-                labels[i] = labels[labels[i]];
-                i = labels[i];
+                unsigned int parent = d_voxels[index].label;
+                unsigned int grandparent = d_voxels[parent].label;
+
+                if (parent != grandparent)
+                {
+                    atomicCAS(&d_voxels[index].label, parent, grandparent);
+                }
+                index = d_voxels[index].label;
             }
-            return i;
+            return index;
+        }
+
+        __device__ __forceinline__ void Union(Voxel* d_voxels, unsigned int a, unsigned int b)
+        {
+            unsigned int rootA = FindRoot(d_voxels, a);
+            unsigned int rootB = FindRoot(d_voxels, b);
+
+            if (rootA != rootB)
+            {
+                if (rootA < rootB)
+                    atomicMin(&d_voxels[rootB].label, rootA);
+                else
+                    atomicMin(&d_voxels[rootA].label, rootB);
+            }
+        }
+
+        __global__ void Kernel_ConnectedComponentLabeling(
+            Voxel* d_voxels,
+            dim3* occupiedVoxelIndices,
+            unsigned int numberOfOccupiedVoxels,
+            dim3 volumeDimensions)
+        {
+            unsigned int threadid = blockIdx.x * blockDim.x + threadIdx.x;
+            if (threadid >= numberOfOccupiedVoxels) return;
+
+            dim3 voxelIdx = occupiedVoxelIndices[threadid];
+            unsigned int index = voxelIdx.z * volumeDimensions.x * volumeDimensions.y + voxelIdx.y * volumeDimensions.x + voxelIdx.x;
+
+            // Ensure the voxel is occupied
+            if (d_voxels[index].position.x == FLT_MAX) return;
+
+            // 6-connected neighborhood (±X, ±Y, ±Z)
+            int dx[6] = { 1, -1, 0, 0, 0, 0 };
+            int dy[6] = { 0, 0, 1, -1, 0, 0 };
+            int dz[6] = { 0, 0, 0, 0, 1, -1 };
+
+            for (int i = 0; i < 6; i++)
+            {
+                int nx = voxelIdx.x + dx[i];
+                int ny = voxelIdx.y + dy[i];
+                int nz = voxelIdx.z + dz[i];
+
+                if (nx >= 0 && nx < volumeDimensions.x &&
+                    ny >= 0 && ny < volumeDimensions.y &&
+                    nz >= 0 && nz < volumeDimensions.z)
+                {
+                    unsigned int neighborIndex = nz * volumeDimensions.x * volumeDimensions.y + ny * volumeDimensions.x + nx;
+
+                    // Check if the neighbor is occupied
+                    if (d_voxels[neighborIndex].position.x != FLT_MAX)
+                    {
+                        Union(d_voxels, index, neighborIndex);
+                    }
+                }
+            }
+        }
+
+        void ConnectedComponentLabeling(
+            Voxel* d_voxels,
+            dim3* occupiedVoxelIndices,
+            unsigned int numberOfOccupiedVoxelIndices,
+            dim3 volumeDimensions)
+        {
+            unsigned int blockSize = 256;
+            unsigned int gridSize = (numberOfOccupiedVoxelIndices + blockSize - 1) / blockSize;
+
+            for (int i = 0; i < 20; i++) // Increase iterations to ensure full convergence
+            {
+                Kernel_ConnectedComponentLabeling << <gridSize, blockSize >> > (
+                    d_voxels, occupiedVoxelIndices, numberOfOccupiedVoxelIndices, volumeDimensions);
+                cudaDeviceSynchronize();
+            }
         }
 
         void VisualizeVoxels(
-            float* d_points,
-            unsigned int numberOfPoints,
             Voxel* d_voxels,
             unsigned int numberOfVoxels,
             dim3 volumeDimensions,
             float voxelSize,
-            float3 volumeMin,
-            float3 volumeCenter,
-            dim3* occupiedVoxelIndices,
-            unsigned int* numberOfOccupiedVoxelIndices)
+            float3 volumeMin)
         {
             Voxel* h_voxels = new Voxel[numberOfVoxels];
             cudaMemcpy(h_voxels, d_voxels, sizeof(Voxel) * numberOfVoxels, cudaMemcpyDeviceToHost);
 
-            unsigned int h_numberOfOccupiedVoxelIndices = 0;
-            cudaMemcpy(&h_numberOfOccupiedVoxelIndices, numberOfOccupiedVoxelIndices, sizeof(unsigned int), cudaMemcpyDeviceToHost);
-            
-            dim3* h_occupiedVoxelIndices = new dim3[h_numberOfOccupiedVoxelIndices];
-            cudaMemcpy(h_occupiedVoxelIndices, occupiedVoxelIndices, sizeof(dim3) * h_numberOfOccupiedVoxelIndices, cudaMemcpyDeviceToHost);
+            std::unordered_map<unsigned int, std::tuple<unsigned char, unsigned char, unsigned char>> labelToColor;
 
-            alog("h_numberOfOccupiedVoxelIndices : %d\n", h_numberOfOccupiedVoxelIndices);
-
-            for (size_t i = 0; i < h_numberOfOccupiedVoxelIndices; i++)
+            for (size_t i = 0; i < numberOfVoxels; i++)
             {
-                auto& index = h_occupiedVoxelIndices[i];
-                //alog("%d, %d, %d\n", index.x, index.y, index.z);
-                unsigned int flattenIndex = index.z * volumeDimensions.x * volumeDimensions.y + index.y * volumeDimensions.x + index.x;
-                auto& voxel = h_voxels[flattenIndex];
+                auto& voxel = h_voxels[i];
 
-                if (FLT_MAX != voxel.position.x && FLT_MAX != voxel.position.y && FLT_MAX != voxel.position.z)
+                if (voxel.position.x != FLT_MAX) // Only visualize occupied voxels
                 {
-                    //alog("%f, %f, %f\n", voxel.position.x, voxel.position.y, voxel.position.z);
-                    VD::AddCube("occupid voxels", { voxel.position.x, voxel.position.y, voxel.position.z }, 0.05f);
+                    unsigned int label = voxel.label;
+
+                    // Assign a unique color per label using a hash function
+                    if (labelToColor.find(label) == labelToColor.end())
+                    {
+                        unsigned char r = (label * 53) % 256;
+                        unsigned char g = (label * 97) % 256;
+                        unsigned char b = (label * 151) % 256;
+                        labelToColor[label] = std::make_tuple(r, g, b);
+                    }
+
+                    // Get the assigned color
+                    auto [r, g, b] = labelToColor[label];
+
+                    // Visualize the voxel with the computed color
+                    VD::AddCube("labeled voxels", { voxel.position.x, voxel.position.y, voxel.position.z },
+                        0.05f, { r, g, b, 255 });
                 }
             }
 
-            delete h_voxels;
+            delete[] h_voxels;
         }
 
 		void TestClustering()
 		{
-            vector<Point3D> pointCloud;
-
 			PLYFormat ply;
 
 			ply.Deserialize("C:\\Resources\\Debug\\Serialized\\Debugging_1_1002.ply");
@@ -294,8 +270,6 @@ namespace CUDA
 				VD::AddSphere("points", { x, y, z }, 0.05f, {(unsigned char)(r * 255.0f), (unsigned char)(g * 255.0f), (unsigned char)(b * 255.0f), 255});
 
                 //VD::AddCube("occupid voxels", { x, y, z }, 0.05f);
-
-                pointCloud.push_back({ x,y,z,(int)0 });
 			}
 
             float* d_points = nullptr;
@@ -315,10 +289,14 @@ namespace CUDA
             Voxel* d_voxels = nullptr;
             cudaMalloc(&d_voxels, sizeof(Voxel) * numberOfVoxels);
 
+            unsigned int* d_labels = nullptr;
+            cudaMalloc(&d_labels, sizeof(unsigned int) * numberOfVoxels);
+
             dim3* occupiedVoxelIndices = nullptr;
             cudaMalloc(&occupiedVoxelIndices, sizeof(dim3) * 5000000);
             unsigned int* numberOfOccupiedVoxelIndices = nullptr;
             cudaMalloc(&numberOfOccupiedVoxelIndices, sizeof(unsigned int));
+            cudaMemset(numberOfOccupiedVoxelIndices, 0, sizeof(unsigned int));
 
             ClearVoxels(d_voxels, numberOfVoxels, volumeDimensions, voxelSize, volumeMin, volumeCenter);
 
@@ -334,17 +312,17 @@ namespace CUDA
                 occupiedVoxelIndices,
                 numberOfOccupiedVoxelIndices);
 
+            unsigned int h_numberOfOccupiedVoxelIndices = 0;
+            cudaMemcpy(&h_numberOfOccupiedVoxelIndices, numberOfOccupiedVoxelIndices, sizeof(unsigned int), cudaMemcpyDeviceToHost);
+
+            ConnectedComponentLabeling(d_voxels, occupiedVoxelIndices, h_numberOfOccupiedVoxelIndices, volumeDimensions);
+
             VisualizeVoxels(
-                d_points,
-                numberOfPoints,
                 d_voxels,
                 numberOfVoxels,
                 volumeDimensions,
                 voxelSize,
-                volumeMin,
-                volumeCenter,
-                occupiedVoxelIndices,
-                numberOfOccupiedVoxelIndices);
+                volumeMin);
 
             //connectedComponentLabelingCUDA(pointCloud);
 
@@ -363,6 +341,7 @@ namespace CUDA
 
             cudaFree(d_points);
             cudaFree(d_voxels);
+            cudaFree(d_labels);
             cudaFree(occupiedVoxelIndices);
             cudaFree(numberOfOccupiedVoxelIndices);
 
