@@ -140,6 +140,14 @@ void CustomTrackballStyle::OnMouseMove()
     bool propagateEvent = true;
     propagateEvent = app->OnMouseMove(pos[0], pos[1], lastPos[0], lastPos[1], LeftButtonPressed, MiddleButtonPressed, RightButtonPressed);
     //printf("[%4d, %4d] - [%4d, %4d]\n", lastPos[0], lastPos[1], pos[0], pos[1]);
+
+    //if (this->State == VTKIS_ROTATE) {
+    //    vtkCamera* camera = this->GetCurrentRenderer()->GetActiveCamera();
+    //    double* pos = camera->GetPosition();
+    //    std::cout << "Camera Position: " << pos[0] << ", " << pos[1] << ", " << pos[2] << std::endl;
+    //}
+
+    vtkInteractorStyleTrackballCamera::OnMouseMove();
 }
 
 void CustomTrackballStyle::OnMouseWheelForward()

@@ -28,6 +28,17 @@ void TimerCallback::OnTimer()
 	//Debugging::EndFrame();
 
 	VisualDebugging::Update();
+
+	CustomTrackballStyle* style = nullptr;
+	app->GetInteractor()->GetInteractorStyle()->SafeDownCast(style);
+	if (nullptr != style)
+	{
+		if (style->GetState() == VTKIS_ROTATE) {
+			vtkCamera* camera = app->GetRenderer()->GetActiveCamera();
+			double* pos = camera->GetPosition();
+			std::cout << "Camera Position: " << pos[0] << ", " << pos[1] << ", " << pos[2] << std::endl;
+		}
+	}
 }
 
 PostRenderCallback* PostRenderCallback::New() { return new PostRenderCallback; }
@@ -94,7 +105,7 @@ void App::Run()
 	interactor = vtkSmartPointer<vtkRenderWindowInteractor>::New();
 	customTrackballStyle = vtkSmartPointer<CustomTrackballStyle>::New();
 	customTrackballStyle->SetApp(this);
-	//customTrackballStyle->SetMotionFactor(300);
+	//customTrackballStyle->SetMotionFactor(100);
 	interactor->SetInteractorStyle(customTrackballStyle);
 	interactor->SetRenderWindow(renderWindow);
 	interactor->Initialize();
