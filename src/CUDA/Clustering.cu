@@ -42,9 +42,14 @@ namespace CUDA
             float3 volumeMin,
             float3 volumeCenter)
         {
+            nvtxRangePush("ClearVoxels");
+
             unsigned int blockSize = 256;
             unsigned int gridSize = (numberOfVoxels + blockSize - 1) / blockSize;
             Kernel_ClearVoxels<<<gridSize, blockSize>>>(d_voxels, numberOfVoxels, volumeDimensions, voxelSize, volumeMin, volumeCenter);
+
+            cudaDeviceSynchronize();
+            nvtxRangePop();
         }
 
         __global__ void Kernel_OccupyVoxels(
@@ -106,6 +111,8 @@ namespace CUDA
             dim3* occupiedVoxelIndices,
             unsigned int* numberOfOccupiedVoxelIndices)
         {
+            nvtxRangePush("OccupyVoxels");
+
             unsigned int blockSize = 256;
             unsigned int gridSize = (numberOfPoints + blockSize - 1) / blockSize;
 
@@ -120,6 +127,9 @@ namespace CUDA
                 volumeCenter,
                 occupiedVoxelIndices,
                 numberOfOccupiedVoxelIndices);
+
+            cudaDeviceSynchronize();
+            nvtxRangePop();
         }
 
         __device__ __forceinline__ unsigned int FindRoot(Voxel* d_voxels, unsigned int index)
@@ -199,6 +209,8 @@ namespace CUDA
             unsigned int numberOfOccupiedVoxelIndices,
             dim3 volumeDimensions)
         {
+            nvtxRangePush("ConnectedComponentLabeling");
+
             unsigned int blockSize = 256;
             unsigned int gridSize = (numberOfOccupiedVoxelIndices + blockSize - 1) / blockSize;
 
@@ -208,6 +220,9 @@ namespace CUDA
                     d_voxels, occupiedVoxelIndices, numberOfOccupiedVoxelIndices, volumeDimensions);
                 cudaDeviceSynchronize();
             }
+
+            cudaDeviceSynchronize();
+            nvtxRangePop();
         }
 
         void VisualizeVoxels(
@@ -217,6 +232,8 @@ namespace CUDA
             float voxelSize,
             float3 volumeMin)
         {
+            nvtxRangePush("VisualizeVoxels");
+
             Voxel* h_voxels = new Voxel[numberOfVoxels];
             cudaMemcpy(h_voxels, d_voxels, sizeof(Voxel) * numberOfVoxels, cudaMemcpyDeviceToHost);
 
@@ -249,6 +266,9 @@ namespace CUDA
             }
 
             delete[] h_voxels;
+
+            cudaDeviceSynchronize();
+            nvtxRangePop();
         }
 
 		void TestClustering()
@@ -271,6 +291,8 @@ namespace CUDA
 
                 //VD::AddCube("occupid voxels", { x, y, z }, 0.05f);
 			}
+
+            nvtxRangePush("TestClustering");
 
             float* d_points = nullptr;
             cudaMalloc(&d_points, sizeof(float) * ply.GetPoints().size());
@@ -345,6 +367,8 @@ namespace CUDA
             cudaFree(occupiedVoxelIndices);
             cudaFree(numberOfOccupiedVoxelIndices);
 
+            cudaDeviceSynchronize();
+            nvtxRangePop();
 		}
 	}
 }
