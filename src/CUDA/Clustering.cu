@@ -171,33 +171,48 @@ namespace CUDA
             unsigned int threadid = blockIdx.x * blockDim.x + threadIdx.x;
             if (threadid >= numberOfOccupiedVoxels) return;
 
-            dim3 voxelIdx = occupiedVoxelIndices[threadid];
-            unsigned int index = voxelIdx.z * volumeDimensions.x * volumeDimensions.y + voxelIdx.y * volumeDimensions.x + voxelIdx.x;
+            dim3 voxelIndex = occupiedVoxelIndices[threadid];
+            unsigned int index = voxelIndex.z * volumeDimensions.x * volumeDimensions.y + voxelIndex.y * volumeDimensions.x + voxelIndex.x;
 
-            // Ensure the voxel is occupied
-            if (d_voxels[index].position.x == FLT_MAX) return;
+            if (d_voxels[index].position.x == FLT_MAX ||
+                d_voxels[index].position.y == FLT_MAX ||
+                d_voxels[index].position.z == FLT_MAX) return;
 
-            // 6-connected neighborhood (¡¾X, ¡¾Y, ¡¾Z)
-            int dx[6] = { 1, -1, 0, 0, 0, 0 };
-            int dy[6] = { 0, 0, 1, -1, 0, 0 };
-            int dz[6] = { 0, 0, 0, 0, 1, -1 };
+            int offset = 1;
+            int xIndex = (int)voxelIndex.x;
+            int yIndex = (int)voxelIndex.y;
+            int zIndex = (int)voxelIndex.z;
 
-            for (int i = 0; i < 6; i++)
+            for (int zOffset = -offset; zOffset <= offset; zOffset++)
             {
-                int nx = voxelIdx.x + dx[i];
-                int ny = voxelIdx.y + dy[i];
-                int nz = voxelIdx.z + dz[i];
+                int nz = zIndex + zOffset;
 
-                if (nx >= 0 && nx < volumeDimensions.x &&
-                    ny >= 0 && ny < volumeDimensions.y &&
-                    nz >= 0 && nz < volumeDimensions.z)
+                if (0 > nz || (int)volumeDimensions.z <= nz) continue;
+                for (int yOffset = -offset; yOffset <= offset; yOffset++)
                 {
-                    unsigned int neighborIndex = nz * volumeDimensions.x * volumeDimensions.y + ny * volumeDimensions.x + nx;
+                    int ny = yIndex + yOffset;
 
-                    // Check if the neighbor is occupied
-                    if (d_voxels[neighborIndex].position.x != FLT_MAX)
+                    if (0 > ny || (int)volumeDimensions.y <= ny) continue;
+                    for (int xOffset = -offset; xOffset <= offset; xOffset++)
                     {
-                        Union(d_voxels, index, neighborIndex);
+                        int nx = xIndex + xOffset;
+
+                        if (0 > nx || (int)volumeDimensions.x <= nx) continue;
+                        if (0 == xOffset && 0 == yOffset && 0 == zOffset) continue;
+
+
+                        if (nx >= 0 && nx < volumeDimensions.x &&
+                            ny >= 0 && ny < volumeDimensions.y &&
+                            nz >= 0 && nz < volumeDimensions.z)
+                        {
+                            unsigned int neighborIndex = nz * volumeDimensions.x * volumeDimensions.y + ny * volumeDimensions.x + nx;
+
+                            // Check if the neighbor is occupied
+                            if (d_voxels[neighborIndex].position.x != FLT_MAX)
+                            {
+                                Union(d_voxels, index, neighborIndex);
+                            }
+                        }
                     }
                 }
             }
@@ -214,7 +229,8 @@ namespace CUDA
             unsigned int blockSize = 256;
             unsigned int gridSize = (numberOfOccupiedVoxelIndices + blockSize - 1) / blockSize;
 
-            for (int i = 0; i < 20; i++) // Increase iterations to ensure full convergence
+            //for (int i = 0; i < 20; i++) // Increase iterations to ensure full convergence
+            for (int i = 0; i < 2; i++)
             {
                 Kernel_ConnectedComponentLabeling << <gridSize, blockSize >> > (
                     d_voxels, occupiedVoxelIndices, numberOfOccupiedVoxelIndices, volumeDimensions);
@@ -271,11 +287,28 @@ namespace CUDA
             nvtxRangePop();
         }
 
+        struct ClusteringCacheInfo
+        {
+            float voxelSize;
+            dim3 cacheDimensions;
+            unsigned int numberOfVoxels;
+            Eigen::Vector3f cacheMin;
+
+            cudaArray* cacheData3D = nullptr;
+            cudaSurfaceObject_t surfaceObject3D;
+
+            dim3* occupiedVoxelIndices;
+            unsigned int* numberOfOccupiedVoxelIndices;
+        };
+
 		void TestClustering()
 		{
 			PLYFormat ply;
 
-			ply.Deserialize("C:\\Resources\\Debug\\Serialized\\Debugging_1_1002.ply");
+			//ply.Deserialize("C:\\Resources\\Debug\\Serialized\\Debugging_1_1002.ply");
+            ply.Deserialize("C:\\Resources\\Debug\\Serialized\\Compound.ply");
+
+            bool useColor = ply.GetColors().empty() ? false : true;
 
 			for (size_t i = 0; i < ply.GetPoints().size() / 3; i++)
 			{
@@ -283,11 +316,18 @@ namespace CUDA
 				auto y = ply.GetPoints()[i * 3 + 1];
 				auto z = ply.GetPoints()[i * 3 + 2];
 
-				auto r = ply.GetColors()[i * 3];
-				auto g = ply.GetColors()[i * 3 + 1];
-				auto b = ply.GetColors()[i * 3 + 2];
+                if (useColor)
+                {
+                    auto r = ply.GetColors()[i * 3];
+                    auto g = ply.GetColors()[i * 3 + 1];
+                    auto b = ply.GetColors()[i * 3 + 2];
 
-				VD::AddSphere("points", { x, y, z }, 0.05f, {(unsigned char)(r * 255.0f), (unsigned char)(g * 255.0f), (unsigned char)(b * 255.0f), 255});
+                    VD::AddSphere("points", { x, y, z }, 0.05f, { (unsigned char)(r * 255.0f), (unsigned char)(g * 255.0f), (unsigned char)(b * 255.0f), 255 });
+                }
+                else
+                {
+                    VD::AddSphere("points", { x, y, z }, 0.05f);
+                }
 
                 //VD::AddCube("occupid voxels", { x, y, z }, 0.05f);
 			}
@@ -302,7 +342,8 @@ namespace CUDA
             dim3 volumeDimensions(400, 400, 400);
             unsigned int numberOfVoxels = volumeDimensions.x * volumeDimensions.y * volumeDimensions.z;
             float voxelSize = 0.1f;
-            float3 volumeCenter = make_float3(3.9904f, -15.8357f, -7.2774f);
+            //float3 volumeCenter = make_float3(3.9904f, -15.8357f, -7.2774f);
+            float3 volumeCenter = make_float3(-10.0f, -10.0f, -10.0f);
             float3 volumeMin = make_float3(
                 volumeCenter.x - (float)(volumeDimensions.x / 2) * voxelSize,
                 volumeCenter.y - (float)(volumeDimensions.y / 2) * voxelSize,
@@ -310,9 +351,6 @@ namespace CUDA
 
             Voxel* d_voxels = nullptr;
             cudaMalloc(&d_voxels, sizeof(Voxel) * numberOfVoxels);
-
-            unsigned int* d_labels = nullptr;
-            cudaMalloc(&d_labels, sizeof(unsigned int) * numberOfVoxels);
 
             dim3* occupiedVoxelIndices = nullptr;
             cudaMalloc(&occupiedVoxelIndices, sizeof(dim3) * 5000000);
@@ -363,7 +401,6 @@ namespace CUDA
 
             cudaFree(d_points);
             cudaFree(d_voxels);
-            cudaFree(d_labels);
             cudaFree(occupiedVoxelIndices);
             cudaFree(numberOfOccupiedVoxelIndices);
 
