@@ -61,8 +61,10 @@ namespace CUDA
             float voxelSize,
             float3 volumeMin,
             float3 volumeCenter,
-            dim3* occupiedVoxelIndices,
-            unsigned int* numberOfOccupiedVoxelIndices)
+            uint3* occupiedVoxelIndices,
+            unsigned int* numberOfOccupiedVoxelIndices,
+            unsigned int* occupiedPointIndices,
+            unsigned int* numberOfOccupiedPointIndices)
         {
             unsigned int threadid = blockIdx.x * blockDim.x + threadIdx.x;
             if (threadid >= numberOfPoints) return;
@@ -94,8 +96,12 @@ namespace CUDA
 
             //alog("%f, %f, %f\n", voxel.position.x, voxel.position.y, voxel.position.z);
 
-            auto index = atomicAdd(numberOfOccupiedVoxelIndices, 1);
-            occupiedVoxelIndices[index] = dim3(ix, iy, iz);
+            auto voxelIndex = atomicAdd(numberOfOccupiedVoxelIndices, 1);
+            occupiedVoxelIndices[voxelIndex] = make_uint3(ix, iy, iz);
+
+            auto pointIndex = atomicAdd(numberOfOccupiedPointIndices, 1);
+            occupiedPointIndices[pointIndex] = threadid;
+            
             //alog("%d\n", index);
         }
 
@@ -108,8 +114,10 @@ namespace CUDA
             float voxelSize,
             float3 volumeMin,
             float3 volumeCenter,
-            dim3* occupiedVoxelIndices,
-            unsigned int* numberOfOccupiedVoxelIndices)
+            uint3* occupiedVoxelIndices,
+            unsigned int* numberOfOccupiedVoxelIndices,
+            unsigned int* occupiedPointIndices,
+            unsigned int* numberOfOccupiedPointIndices)
         {
             nvtxRangePush("OccupyVoxels");
 
@@ -126,7 +134,9 @@ namespace CUDA
                 volumeMin,
                 volumeCenter,
                 occupiedVoxelIndices,
-                numberOfOccupiedVoxelIndices);
+                numberOfOccupiedVoxelIndices,
+                occupiedPointIndices,
+                numberOfOccupiedPointIndices);
 
             cudaDeviceSynchronize();
             nvtxRangePop();
@@ -164,7 +174,7 @@ namespace CUDA
 
         __global__ void Kernel_ConnectedComponentLabeling(
             Voxel* d_voxels,
-            dim3* occupiedVoxelIndices,
+            uint3* occupiedVoxelIndices,
             unsigned int numberOfOccupiedVoxels,
             dim3 volumeDimensions)
         {
@@ -220,7 +230,7 @@ namespace CUDA
 
         void ConnectedComponentLabeling(
             Voxel* d_voxels,
-            dim3* occupiedVoxelIndices,
+            uint3* occupiedVoxelIndices,
             unsigned int numberOfOccupiedVoxelIndices,
             dim3 volumeDimensions)
         {
@@ -255,6 +265,8 @@ namespace CUDA
 
             std::unordered_map<unsigned int, std::tuple<unsigned char, unsigned char, unsigned char>> labelToColor;
 
+            std::unordered_map<unsigned int, unsigned int> labelHistogram;
+
             for (size_t i = 0; i < numberOfVoxels; i++)
             {
                 auto& voxel = h_voxels[i];
@@ -278,7 +290,22 @@ namespace CUDA
                     // Visualize the voxel with the computed color
                     VD::AddCube("labeled voxels", { voxel.position.x, voxel.position.y, voxel.position.z },
                         0.05f, { r, g, b, 255 });
+
+                    if (0 == labelHistogram.count(voxel.label))
+                    {
+                        labelHistogram[voxel.label] = 1;
+                    }
+                    else
+                    {
+                        labelHistogram[voxel.label] += 1;
+                    }
                 }
+            }
+
+            int i = 0;
+            for (auto& [label, count] : labelHistogram)
+            {
+                alog("[%4d] label - %16d : count - %8d\n", i++, label, count);
             }
 
             delete[] h_voxels;
@@ -297,7 +324,7 @@ namespace CUDA
             cudaArray* cacheData3D = nullptr;
             cudaSurfaceObject_t surfaceObject3D;
 
-            dim3* occupiedVoxelIndices;
+            uint3* occupiedVoxelIndices;
             unsigned int* numberOfOccupiedVoxelIndices;
         };
 
@@ -352,11 +379,17 @@ namespace CUDA
             Voxel* d_voxels = nullptr;
             cudaMalloc(&d_voxels, sizeof(Voxel) * numberOfVoxels);
 
-            dim3* occupiedVoxelIndices = nullptr;
-            cudaMalloc(&occupiedVoxelIndices, sizeof(dim3) * 5000000);
+            uint3* occupiedVoxelIndices = nullptr;
+            cudaMalloc(&occupiedVoxelIndices, sizeof(uint3) * 5000000);
             unsigned int* numberOfOccupiedVoxelIndices = nullptr;
             cudaMalloc(&numberOfOccupiedVoxelIndices, sizeof(unsigned int));
             cudaMemset(numberOfOccupiedVoxelIndices, 0, sizeof(unsigned int));
+
+            unsigned int* occupiedPointIndices = nullptr;
+            cudaMalloc(&occupiedPointIndices, sizeof(unsigned int) * 5000000);
+            unsigned int* numberOfOccupiedPointIndices = nullptr;
+            cudaMalloc(&numberOfOccupiedPointIndices, sizeof(unsigned int));
+            cudaMemset(numberOfOccupiedPointIndices, 0, sizeof(unsigned int));
 
             ClearVoxels(d_voxels, numberOfVoxels, volumeDimensions, voxelSize, volumeMin, volumeCenter);
 
@@ -370,7 +403,9 @@ namespace CUDA
                 volumeMin,
                 volumeCenter,
                 occupiedVoxelIndices,
-                numberOfOccupiedVoxelIndices);
+                numberOfOccupiedVoxelIndices,
+                occupiedPointIndices,
+                numberOfOccupiedPointIndices);
 
             unsigned int h_numberOfOccupiedVoxelIndices = 0;
             cudaMemcpy(&h_numberOfOccupiedVoxelIndices, numberOfOccupiedVoxelIndices, sizeof(unsigned int), cudaMemcpyDeviceToHost);
@@ -384,25 +419,30 @@ namespace CUDA
                 voxelSize,
                 volumeMin);
 
-            //connectedComponentLabelingCUDA(pointCloud);
+           
+            unsigned int h_numberOfOccupiedPointIndices = 0;
+            cudaMemcpy(&h_numberOfOccupiedPointIndices, numberOfOccupiedPointIndices, sizeof(unsigned int), cudaMemcpyDeviceToHost);
+            unsigned int* h_occupiedPointIndices = new unsigned int[h_numberOfOccupiedPointIndices];
+            cudaMemcpy(h_occupiedPointIndices, occupiedPointIndices, sizeof(unsigned int) * h_numberOfOccupiedPointIndices, cudaMemcpyDeviceToHost);
 
-            //for (auto& p : pointCloud)
-            //{
-            //    auto x = p.x;
-            //    auto y = p.y;
-            //    auto z = p.z;
+            for (size_t i = 0; i < h_numberOfOccupiedPointIndices; i++)
+            {
+                auto index = h_occupiedPointIndices[i];
+                auto x = ply.GetPoints()[index * 3];
+                auto y = ply.GetPoints()[index * 3 + 1];
+                auto z = ply.GetPoints()[index * 3 + 2];
 
-            //    auto r = p.label / 255.0f;
-            //    auto g = p.label / 255.0f;
-            //    auto b = p.label / 255.0f;
-
-            //    VD::AddSphere("points_result", { x, y, z }, 0.05f, { (unsigned char)(r * 255.0f), (unsigned char)(g * 255.0f), (unsigned char)(b * 255.0f), 255 });
-            //}
+                VD::AddSphere("In Area", { x,y, z }, 0.05f, {255, 0, 0});
+            }
 
             cudaFree(d_points);
             cudaFree(d_voxels);
             cudaFree(occupiedVoxelIndices);
             cudaFree(numberOfOccupiedVoxelIndices);
+            cudaFree(occupiedPointIndices);
+            cudaFree(numberOfOccupiedPointIndices);
+
+            delete[] h_occupiedPointIndices;
 
             cudaDeviceSynchronize();
             nvtxRangePop();
